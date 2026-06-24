@@ -29,7 +29,13 @@ jobs:
         uses: actions/configure-pages@v5
 
       - name: Create runtime config
-        run: node -e 'const fs = require("fs"); fs.writeFileSync("outputs/ccatalog/config.json", JSON.stringify({ naverMapKey: process.env.NAVER_MAP_KEY || "" }, null, 2));'
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require("fs");
+          const config = { naverMapKey: process.env.NAVER_MAP_KEY || "" };
+          fs.writeFileSync("outputs/ccatalog/config.json", `${JSON.stringify(config, null, 2)}\n`);
+          NODE
         env:
           NAVER_MAP_KEY: ${{ secrets.NAVER_MAP_KEY }}
 
