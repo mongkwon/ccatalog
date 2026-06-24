@@ -16,11 +16,11 @@ const MOCK_BOUNDS = {
 };
 
 const RATING_META = {
-  0: { label: "소개", icon: "○", stars: "" },
-  1: { label: "1스타", icon: "★", stars: "★" },
-  2: { label: "2스타", icon: "★", stars: "★★" },
-  3: { label: "3스타", icon: "★", stars: "★★★" },
+  1: { label: "동메달", icon: "🥉" },
+  2: { label: "은메달", icon: "🥈" },
+  3: { label: "금메달", icon: "🥇" },
 };
+const RATING_VALUES = new Set(Object.keys(RATING_META).map(Number));
 
 const DELIVERY_APPS = [
   { id: "baemin", label: "배달의민족", shortLabel: "배민" },
@@ -69,13 +69,13 @@ const seedRestaurants = [
     id: "seed-4",
     name: "논현초밥",
     category: "일식",
-    rating: 0,
+    rating: 1,
     area: "강남구 논현",
     lat: 37.5114,
     lng: 127.0285,
     menus: ["점심 오마카세", "고등어봉초밥"],
     deliveryApps: [],
-    memo: "별을 줄 정도는 아니지만 동네 기록에 남길 만한 곳.",
+    memo: "동네 기록에 남길 만한 안정적인 초밥집.",
   },
   {
     id: "seed-5",
@@ -906,12 +906,12 @@ function renderList(restaurants) {
 }
 
 function renderMeta(restaurants) {
-  const counts = { 0: 0, 1: 0, 2: 0, 3: 0 };
+  const counts = { 1: 0, 2: 0, 3: 0 };
   restaurants.forEach((restaurant) => {
     counts[restaurant.rating] += 1;
   });
   els.resultCount.textContent = `${restaurants.length}곳`;
-  els.ratingSummary.textContent = `소개 ${counts[0]} · 1스타 ${counts[1]} · 2스타 ${counts[2]} · 3스타 ${counts[3]}`;
+  els.ratingSummary.textContent = `동메달 ${counts[1]} · 은메달 ${counts[2]} · 금메달 ${counts[3]}`;
 }
 
 function renderSelectedCard(visibleRestaurants) {
@@ -1094,10 +1094,9 @@ function clearCoordinateInputs() {
 
 function ratingBadge(rating) {
   const meta = RATING_META[rating];
-  const symbol = rating === 0 ? meta.icon : meta.stars;
   return `
     <span class="rating-badge" data-rating="${rating}" aria-label="${meta.label}">
-      <span aria-hidden="true">${symbol}</span>
+      <span aria-hidden="true">${meta.icon}</span>
       <span>${meta.label}</span>
     </span>
   `;
@@ -1128,19 +1127,20 @@ function deliveryShortLabels(deliveryApps) {
 }
 
 function pinSymbol(rating) {
-  const meta = RATING_META[rating] ?? RATING_META[0];
-  return rating === 0 ? meta.icon : meta.stars;
+  return RATING_META[rating].icon;
 }
 
 function createPinElement(restaurant, selectedId, onSelect) {
+  const { rating } = restaurant;
+  const meta = RATING_META[rating];
   const button = document.createElement("button");
   button.type = "button";
   button.className = `pin-marker${restaurant.id === selectedId ? " is-selected" : ""}`;
-  button.dataset.rating = String(restaurant.rating);
-  button.setAttribute("aria-label", `${restaurant.name} ${RATING_META[restaurant.rating].label}`);
+  button.dataset.rating = String(rating);
+  button.setAttribute("aria-label", `${restaurant.name} ${meta.label}`);
   button.innerHTML = `
     <span class="pin-head">
-      <span class="pin-level">${pinSymbol(restaurant.rating)}</span>
+      <span class="pin-level">${pinSymbol(rating)}</span>
     </span>
   `;
   button.addEventListener("click", (event) => {
@@ -1152,10 +1152,12 @@ function createPinElement(restaurant, selectedId, onSelect) {
 
 function pinHtml(restaurant, selectedId) {
   const selectedClass = restaurant.id === selectedId ? " is-selected" : "";
+  const { rating } = restaurant;
+  const meta = RATING_META[rating];
   return `
-    <button class="pin-marker${selectedClass}" data-rating="${restaurant.rating}" aria-label="${escapeHtml(restaurant.name)} ${RATING_META[restaurant.rating].label}">
+    <button class="pin-marker${selectedClass}" data-rating="${rating}" aria-label="${escapeHtml(restaurant.name)} ${meta.label}">
       <span class="pin-head">
-        <span class="pin-level">${pinSymbol(restaurant.rating)}</span>
+        <span class="pin-level">${pinSymbol(rating)}</span>
       </span>
     </button>
   `;
@@ -1379,12 +1381,14 @@ function normalizeRestaurant(item) {
   if (!item || typeof item !== "object") return null;
   const lat = Number(item.lat);
   const lng = Number(item.lng);
+  const rating = Number(item.rating);
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  if (!isSupportedRating(rating)) return null;
   return {
     id: String(item.id || createId()),
     name: String(item.name || "이름 없음"),
     category: String(item.category || "기타"),
-    rating: clampRating(Number(item.rating)),
+    rating,
     area: String(item.area || ""),
     lat,
     lng,
@@ -1413,8 +1417,12 @@ function isUuid(value) {
 }
 
 function clampRating(value) {
-  if (!Number.isFinite(value)) return 0;
-  return Math.max(0, Math.min(3, Math.round(value)));
+  if (!Number.isFinite(value)) return 1;
+  return Math.max(1, Math.min(3, Math.round(value)));
+}
+
+function isSupportedRating(value) {
+  return Number.isInteger(value) && RATING_VALUES.has(value);
 }
 
 function escapeHtml(value) {

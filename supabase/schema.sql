@@ -5,7 +5,7 @@ create table if not exists public.restaurants (
   owner_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
   name text not null check (char_length(trim(name)) between 1 and 80),
   category text not null default '기타' check (char_length(trim(category)) between 1 and 30),
-  rating smallint not null default 0 check (rating between 0 and 3),
+  rating smallint not null default 1 check (rating between 1 and 3),
   area text not null default '' check (char_length(area) <= 80),
   lat double precision not null check (lat between -90 and 90),
   lng double precision not null check (lng between -180 and 180),

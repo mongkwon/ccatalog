@@ -410,7 +410,7 @@ button {
 .filter-row {
   grid-area: filters;
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 7px;
 }
 
@@ -581,6 +581,7 @@ button {
 }
 
 .rating-badge {
+  --medal-color: #8d6444;
   display: inline-flex;
   min-height: 26px;
   flex: 0 0 auto;
@@ -588,10 +589,10 @@ button {
   justify-content: center;
   gap: 5px;
   padding: 0 8px;
-  border: 1px solid rgba(18, 159, 189, 0.24);
+  border: 1px solid color-mix(in srgb, var(--medal-color) 24%, transparent);
   border-radius: 999px;
-  color: #063342;
-  background: rgba(205, 236, 242, 0.5);
+  color: color-mix(in srgb, var(--medal-color) 72%, #111820);
+  background: rgba(17, 24, 32, 0.04);
   backdrop-filter: blur(14px) saturate(1.42);
   -webkit-backdrop-filter: blur(14px) saturate(1.42);
   font-size: 10px;
@@ -602,13 +603,16 @@ button {
 
 .rating-badge span:first-child {
   font-family: inherit;
-  font-size: 10px;
+  font-size: 14px;
   line-height: 1;
 }
 
-.rating-badge[data-rating="0"] {
-  color: var(--soft-ink);
-  background: rgba(255, 255, 255, 0.3);
+.rating-badge[data-rating="2"] {
+  --medal-color: #7b8490;
+}
+
+.rating-badge[data-rating="3"] {
+  --medal-color: #b1872e;
 }
 
 .menu-row,
@@ -879,21 +883,30 @@ button {
   height: 16px;
   margin-top: -1px;
   content: "";
-  background: linear-gradient(to bottom, rgba(18, 159, 189, 0.58), transparent);
+  background: linear-gradient(to bottom, rgba(17, 24, 32, 0.24), transparent);
 }
 
 .pin-head {
+  --medal-color: #8d6444;
   display: grid;
   width: 44px;
   height: 44px;
   place-items: center;
-  border: 1px solid rgba(17, 24, 32, 0.08);
+  border: 1px solid color-mix(in srgb, var(--medal-color) 32%, rgba(17, 24, 32, 0.08));
   border-radius: 50%;
-  color: #063342;
-  background: rgba(205, 236, 242, 0.56);
+  color: #111820;
+  background: rgba(17, 24, 32, 0.04);
   box-shadow: 0 1px 0 rgba(17, 24, 32, 0.04);
   backdrop-filter: blur(16px) saturate(1.45);
   -webkit-backdrop-filter: blur(16px) saturate(1.45);
+}
+
+.pin-marker[data-rating="2"] .pin-head {
+  --medal-color: #7b8490;
+}
+
+.pin-marker[data-rating="3"] .pin-head {
+  --medal-color: #b1872e;
 }
 
 .pin-level {
@@ -902,36 +915,17 @@ button {
   align-items: center;
   justify-content: center;
   font-family: inherit;
-  font-size: 16px;
+  font-size: 22px;
   font-weight: 900;
   line-height: 1;
   letter-spacing: 0;
   white-space: nowrap;
 }
 
-.pin-marker[data-rating="2"] .pin-level {
-  font-size: 13px;
-}
-
-.pin-marker[data-rating="3"] .pin-level {
-  font-size: 11px;
-}
-
-.pin-marker[data-rating="0"] .pin-head {
-  color: var(--ink);
-  background:
-    linear-gradient(140deg, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.18)),
-    rgba(255, 255, 255, 0.24);
-  backdrop-filter: blur(18px) saturate(1.35);
-  -webkit-backdrop-filter: blur(18px) saturate(1.35);
-}
-
-.pin-marker[data-rating="0"]::after {
-  background: linear-gradient(to bottom, rgba(17, 24, 32, 0.24), transparent);
-}
-
 .pin-marker.is-selected .pin-head {
-  box-shadow: 0 0 0 8px rgba(124, 226, 242, 0.18);
+  box-shadow:
+    0 0 0 8px color-mix(in srgb, var(--medal-color) 16%, transparent),
+    0 1px 0 rgba(17, 24, 32, 0.04);
 }
 
 .modal {
@@ -1400,7 +1394,7 @@ button {
   }
 
   .filter-row {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 5px;
   }
 

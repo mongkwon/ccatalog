@@ -6,8 +6,8 @@
     <title>까탈로그</title>
     <link rel="icon" href="data:," />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" />
-    <link rel="stylesheet" href="./styles.css" />
-    <script defer src="./app.js?v=20260624-enter-search"></script>
+    <link rel="stylesheet" href="./styles.css?v=20260624-medals" />
+    <script defer src="./app.js?v=20260624-medals"></script>
   </head>
   <body>
     <main class="app-shell">
@@ -41,15 +41,14 @@
         <aside id="restaurantPanel" class="restaurant-panel" aria-label="맛집 목록" aria-hidden="true">
           <div class="filter-row" role="group" aria-label="별 필터">
             <button class="filter-chip is-active" type="button" data-filter="all">전체</button>
-            <button class="filter-chip" type="button" data-filter="0">소개</button>
-            <button class="filter-chip" type="button" data-filter="1">1스타</button>
-            <button class="filter-chip" type="button" data-filter="2">2스타</button>
-            <button class="filter-chip" type="button" data-filter="3">3스타</button>
+            <button class="filter-chip" type="button" data-filter="1">동메달</button>
+            <button class="filter-chip" type="button" data-filter="2">은메달</button>
+            <button class="filter-chip" type="button" data-filter="3">금메달</button>
           </div>
 
           <div class="panel-meta">
             <strong id="resultCount">0곳</strong>
-            <span id="ratingSummary">소개 0 · 1스타 0 · 2스타 0 · 3스타 0</span>
+            <span id="ratingSummary">동메달 0 · 은메달 0 · 금메달 0</span>
           </div>
 
           <div id="restaurantList" class="restaurant-list"></div>
@@ -155,20 +154,16 @@
           <fieldset class="rating-field span-2">
             <legend>별</legend>
             <label>
-              <input type="radio" name="rating" value="0" checked />
-              <span>소개</span>
-            </label>
-            <label>
-              <input type="radio" name="rating" value="1" />
-              <span>1스타</span>
+              <input type="radio" name="rating" value="1" checked />
+              <span>동메달</span>
             </label>
             <label>
               <input type="radio" name="rating" value="2" />
-              <span>2스타</span>
+              <span>은메달</span>
             </label>
             <label>
               <input type="radio" name="rating" value="3" />
-              <span>3스타</span>
+              <span>금메달</span>
             </label>
           </fieldset>
 
