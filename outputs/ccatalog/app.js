@@ -7,6 +7,16 @@ const runtimeConfig = {
   supabaseAnonKey: "",
 };
 const DEFAULT_CENTER = { lat: 37.566535, lng: 126.977969 };
+const INITIAL_MAP_ZOOM = 13;
+const INITIAL_NEARBY_RADIUS_KM = 4;
+const INITIAL_REVEAL_RESTAURANT_LIMIT = 4;
+const INITIAL_REVEAL_BOUNDS_OPTIONS = {
+  top: 116,
+  right: 56,
+  bottom: 230,
+  left: 56,
+  maxZoom: INITIAL_MAP_ZOOM,
+};
 const USER_LOCATION_TIMEOUT_MS = 7000;
 const USER_LOCATION_MAX_AGE_MS = 5 * 60 * 1000;
 const MOCK_BOUNDS = {
@@ -746,6 +756,43 @@ function isValidCoordinate(coord) {
   );
 }
 
+function getInitialRestaurantRevealCoordinates(origin) {
+  const nearbyRestaurants = state.restaurants
+    .map((restaurant) => {
+      const coord = { lat: Number(restaurant.lat), lng: Number(restaurant.lng) };
+      return isValidCoordinate(coord) ? { coord, distanceKm: distanceKmBetween(origin, coord) } : null;
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.distanceKm - b.distanceKm);
+
+  if (!nearbyRestaurants.length || nearbyRestaurants[0].distanceKm <= INITIAL_NEARBY_RADIUS_KM) {
+    return [origin];
+  }
+
+  const revealLimitKm = Math.max(INITIAL_NEARBY_RADIUS_KM, nearbyRestaurants[0].distanceKm * 1.35);
+  const revealRestaurants = nearbyRestaurants
+    .filter((restaurant) => restaurant.distanceKm <= revealLimitKm)
+    .slice(0, INITIAL_REVEAL_RESTAURANT_LIMIT);
+
+  return [origin, ...revealRestaurants.map((restaurant) => restaurant.coord)];
+}
+
+function distanceKmBetween(start, end) {
+  const earthRadiusKm = 6371;
+  const startLat = toRadians(start.lat);
+  const endLat = toRadians(end.lat);
+  const deltaLat = toRadians(end.lat - start.lat);
+  const deltaLng = toRadians(end.lng - start.lng);
+  const a =
+    Math.sin(deltaLat / 2) ** 2 +
+    Math.cos(startLat) * Math.cos(endLat) * Math.sin(deltaLng / 2) ** 2;
+  return earthRadiusKm * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function toRadians(value) {
+  return (value * Math.PI) / 180;
+}
+
 function toOptionalNumber(value) {
   if (value === null || value === undefined || value === "") return NaN;
   const numberValue = Number(value);
@@ -873,7 +920,12 @@ async function centerMapOnUserLocation(adapter) {
   if (!coord || state.map !== adapter || state.selectedId) return;
 
   state.lastMapCoord = coord;
-  adapter.panTo(coord);
+  const revealCoords = getInitialRestaurantRevealCoordinates(coord);
+  if (revealCoords.length > 1 && typeof adapter.fitToCoordinates === "function") {
+    adapter.fitToCoordinates(revealCoords);
+  } else {
+    adapter.panTo(coord);
+  }
 }
 
 function getUserLocationCoord() {
@@ -1621,6 +1673,13 @@ class MockMapAdapter {
     this.center = coord;
   }
 
+  fitToCoordinates(coords) {
+    const [firstCoord] = coords.filter(isValidCoordinate);
+    if (firstCoord) {
+      this.center = firstCoord;
+    }
+  }
+
   destroy() {
     this.mockMap.removeEventListener("click", this.onMapClick);
     this.pinsLayer.innerHTML = "";
@@ -1673,7 +1732,7 @@ class NaverMapAdapter {
     this.mockMap.setAttribute("aria-hidden", "true");
     this.map = new window.naver.maps.Map(this.mapHost, {
       center: new window.naver.maps.LatLng(DEFAULT_CENTER.lat, DEFAULT_CENTER.lng),
-      zoom: 13,
+      zoom: INITIAL_MAP_ZOOM,
       scaleControl: false,
       mapDataControl: false,
       zoomControl: true,
@@ -1732,6 +1791,20 @@ class NaverMapAdapter {
 
   panTo(coord) {
     this.map.panTo(new window.naver.maps.LatLng(coord.lat, coord.lng));
+  }
+
+  fitToCoordinates(coords) {
+    const points = coords
+      .filter(isValidCoordinate)
+      .map((coord) => new window.naver.maps.LatLng(coord.lat, coord.lng));
+    if (points.length < 2) {
+      if (points[0]) {
+        this.map.panTo(points[0]);
+      }
+      return;
+    }
+
+    this.map.fitBounds(points, INITIAL_REVEAL_BOUNDS_OPTIONS);
   }
 
   destroy() {
