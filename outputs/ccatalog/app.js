@@ -207,7 +207,7 @@ function bindEvents() {
     closeSelectedRestaurant();
     setRestaurantPanelOpen(true);
     setSearchPanelOpen(true);
-    window.setTimeout(() => els.searchInput.focus(), 120);
+    window.setTimeout(() => els.searchInput.focus(), 340);
   });
 
   els.filterModeButton.addEventListener("pointerdown", (event) => {

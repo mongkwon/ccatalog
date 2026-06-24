@@ -19,7 +19,10 @@
   --dock-bottom: 16px;
   --dock-button-height: 48px;
   --dock-height: 62px;
+  --dock-gap: 8px;
   --dock-surface: rgba(245, 247, 250, 0.28);
+  --dock-motion: 520ms cubic-bezier(0.24, 0.58, 0.24, 1);
+  --dock-fade: 300ms ease;
   --floating-gap: 18px;
   --floating-bottom: calc(var(--dock-bottom) + var(--dock-height) + var(--floating-gap));
   --modal-open-transform: translateX(-50%);
@@ -369,21 +372,21 @@ button {
   transform: scale(1);
   transform-origin: right center;
   transition:
-    width 240ms cubic-bezier(0.2, 0.8, 0.2, 1),
-    max-width 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
-    min-width 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
-    flex-basis 240ms cubic-bezier(0.2, 0.8, 0.2, 1),
-    padding 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
-    transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
-    border-radius 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
-    background 180ms ease;
+    width var(--dock-motion),
+    max-width var(--dock-motion),
+    min-width var(--dock-motion),
+    flex-basis var(--dock-motion),
+    padding var(--dock-motion),
+    transform var(--dock-motion),
+    border-radius var(--dock-motion),
+    background var(--dock-fade);
 }
 
 .search-panel.is-open {
-  width: auto;
+  width: calc(100% - var(--dock-height) - var(--dock-gap));
   min-width: 0;
-  max-width: 999px;
-  flex: 1 1 0;
+  max-width: none;
+  flex: 0 0 calc(100% - var(--dock-height) - var(--dock-gap));
   padding: 7px;
 }
 
@@ -410,16 +413,17 @@ button {
   transform: translateX(16px) scaleX(0.88);
   transform-origin: right center;
   transition:
-    opacity 130ms ease,
-    transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
-    background 160ms ease,
-    border-color 160ms ease;
+    opacity var(--dock-fade),
+    transform var(--dock-motion),
+    background var(--dock-fade),
+    border-color var(--dock-fade);
 }
 
 .search-panel.is-open .search-row {
   opacity: 1;
   pointer-events: auto;
   transform: translateX(0) scaleX(1);
+  transition-delay: 140ms;
 }
 
 .search-row:focus-within {
@@ -794,7 +798,7 @@ button {
   display: flex;
   width: min(508px, calc(100vw - 24px));
   align-items: center;
-  gap: 8px;
+  gap: var(--dock-gap);
   transform: translateX(-50%);
 }
 
@@ -803,8 +807,8 @@ button {
   --dock-indicator-width: 78px;
   --dock-indicator-opacity: 1;
   position: relative;
-  width: auto;
-  flex: 1 1 0;
+  width: calc(100% - var(--dock-height) - var(--dock-gap));
+  flex: 0 0 calc(100% - var(--dock-height) - var(--dock-gap));
   display: grid;
   min-width: 0;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -815,9 +819,9 @@ button {
   box-shadow: 0 1px 0 rgba(17, 24, 32, 0.04);
   touch-action: none;
   transition:
-    width 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
-    flex-basis 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
-    border-radius 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+    width var(--dock-motion),
+    flex-basis var(--dock-motion),
+    border-radius var(--dock-motion);
   user-select: none;
 }
 
@@ -845,15 +849,16 @@ button {
   opacity: 1;
   transform: scale(1);
   transition:
-    opacity 120ms ease,
-    transform 200ms cubic-bezier(0.2, 0.8, 0.2, 1),
-    background 160ms ease;
+    opacity var(--dock-fade),
+    transform var(--dock-motion),
+    background var(--dock-fade);
 }
 
 .search-panel.is-open .dock-search-button {
   opacity: 0;
   pointer-events: none;
   transform: translateX(-14px) scale(0.72);
+  transition-delay: 70ms;
 }
 
 .dock-search-button:hover {
@@ -871,10 +876,12 @@ button {
 }
 
 .dock-mode-button {
-  position: relative;
-  z-index: 1;
-  display: none;
-  width: 100%;
+  position: absolute;
+  z-index: 2;
+  top: 7px;
+  left: 7px;
+  display: grid;
+  width: calc(100% - 14px);
   height: var(--dock-button-height);
   place-items: center;
   border: 1px solid transparent;
@@ -883,6 +890,16 @@ button {
   color: #1c2630;
   background: transparent;
   box-shadow: none;
+  opacity: 0;
+  pointer-events: none;
+  transform: scale(0.72);
+  visibility: hidden;
+  transition:
+    opacity var(--dock-fade),
+    transform var(--dock-motion),
+    visibility 0s linear 220ms,
+    background var(--dock-fade),
+    border-color var(--dock-fade);
 }
 
 .dock-mode-button:hover {
@@ -901,7 +918,11 @@ button {
 }
 
 .dock-cluster.is-search-mode .dock-mode-button {
-  display: grid;
+  opacity: 1;
+  pointer-events: auto;
+  transform: scale(1);
+  visibility: visible;
+  transition-delay: 160ms, 120ms, 0s, 0s, 0s;
 }
 
 .dock-indicator {
@@ -919,9 +940,9 @@ button {
   box-shadow: 0 1px 0 rgba(17, 24, 32, 0.04);
   transform: translateX(var(--dock-indicator-x));
   transition:
-    width 180ms cubic-bezier(0.2, 0.8, 0.2, 1),
-    transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1),
-    opacity 120ms ease;
+    width var(--dock-fade),
+    transform var(--dock-fade),
+    opacity 140ms ease;
   backdrop-filter: blur(24px) saturate(1.7) contrast(1.04);
   -webkit-backdrop-filter: blur(24px) saturate(1.7) contrast(1.04);
 }
@@ -954,17 +975,24 @@ button {
   font-weight: 900;
   letter-spacing: 0;
   opacity: 1;
+  visibility: visible;
   white-space: nowrap;
   transition:
-    opacity 100ms ease,
-    transform 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
+    opacity 160ms ease,
+    transform var(--dock-fade),
+    visibility 0s linear 0s;
 }
 
 .dock-cluster.is-search-mode .dock-filter-button {
-  display: none;
+  grid-area: 1 / 1;
   opacity: 0;
   pointer-events: none;
   transform: scale(0.82);
+  visibility: hidden;
+  transition:
+    opacity 220ms ease,
+    transform var(--dock-fade),
+    visibility 0s linear 240ms;
 }
 
 .dock-filter-button:hover {
