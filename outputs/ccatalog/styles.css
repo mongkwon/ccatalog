@@ -210,9 +210,10 @@ button {
 }
 
 .brand,
-.topbar-menu-button,
 .bottom-dock,
+.dock-search-button,
 .restaurant-panel,
+.search-panel,
 .selected-card,
 .modal-card {
   position: relative;
@@ -225,9 +226,10 @@ button {
 }
 
 .brand::before,
-.topbar-menu-button::before,
 .bottom-dock::before,
+.dock-search-button::before,
 .restaurant-panel::before,
+.search-panel::before,
 .selected-card::before,
 .modal-card::before {
   display: none;
@@ -268,34 +270,6 @@ button {
   font-size: 31px;
   font-weight: 500;
   line-height: 1;
-}
-
-.topbar-menu-button {
-  display: grid;
-  width: 52px;
-  height: 52px;
-  flex: 0 0 auto;
-  place-items: center;
-  border-radius: 50%;
-  padding: 0;
-  color: #1c2630;
-  pointer-events: auto;
-}
-
-.topbar-menu-button:hover,
-.topbar-menu-button.is-active {
-  border-color: rgba(17, 24, 32, 0.16);
-  background: rgba(17, 24, 32, 0.04);
-}
-
-.topbar-menu-button svg {
-  width: 22px;
-  height: 22px;
-  fill: none;
-  stroke: currentColor;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 2;
 }
 
 .brand h1,
@@ -357,12 +331,10 @@ button {
   bottom: var(--floating-bottom);
   display: grid;
   width: min(860px, calc(100vw - 32px));
-  max-height: 230px;
+  max-height: 132px;
   transform: translate(-50%, 10px);
-  grid-template-areas:
-    "search search"
-    "meta list";
-  grid-template-columns: 170px minmax(0, 1fr);
+  grid-template-areas: "meta list";
+  grid-template-columns: 150px minmax(0, 1fr);
   gap: 10px 12px;
   padding: 12px;
   border-radius: 34px;
@@ -382,8 +354,36 @@ button {
   visibility: visible;
 }
 
+.search-panel {
+  position: absolute;
+  z-index: 19;
+  left: 50%;
+  bottom: var(--floating-bottom);
+  width: min(430px, calc(100vw - 32px));
+  padding: 10px;
+  border-radius: 30px;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, 10px);
+  visibility: hidden;
+  transition:
+    opacity 160ms ease,
+    transform 160ms ease,
+    visibility 160ms ease;
+}
+
+.search-panel.is-open {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translate(-50%, 0);
+  visibility: visible;
+}
+
+.is-search-open .restaurant-panel {
+  bottom: calc(var(--floating-bottom) + 76px);
+}
+
 .search-row {
-  grid-area: search;
   display: grid;
   grid-template-columns: 20px 1fr;
   align-items: center;
@@ -429,18 +429,25 @@ button {
   grid-area: meta;
   display: flex;
   min-width: 0;
-  align-items: center;
-  gap: 10px;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 4px;
+  overflow: hidden;
   padding: 0 6px 0 3px;
   color: var(--muted);
   font-size: 12px;
 }
 
 .panel-meta strong {
+  max-width: 100%;
+  overflow: hidden;
   flex: 0 0 auto;
   color: var(--ink);
   font-size: 20px;
   font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .panel-meta span {
@@ -477,6 +484,7 @@ button {
   border: 1px solid rgba(17, 24, 32, 0.1);
   border-radius: 22px;
   color: var(--ink);
+  overflow: hidden;
   text-align: left;
   background: rgba(255, 255, 255, 0.24);
   box-shadow: 0 1px 0 rgba(17, 24, 32, 0.04);
@@ -498,6 +506,10 @@ button {
   align-items: flex-start;
   justify-content: space-between;
   gap: 10px;
+}
+
+.item-head > div {
+  min-width: 0;
 }
 
 .restaurant-item h3,
@@ -541,6 +553,7 @@ button {
 
 .card-side .rating-badge {
   width: 100%;
+  max-width: 100%;
   min-height: 28px;
   padding: 0 6px;
 }
@@ -569,7 +582,9 @@ button {
 .rating-badge {
   --medal-color: #8d6444;
   display: inline-flex;
+  max-width: 76px;
   min-height: 26px;
+  min-width: 0;
   flex: 0 0 auto;
   align-items: center;
   justify-content: center;
@@ -584,7 +599,14 @@ button {
   font-size: 10px;
   font-weight: 900;
   letter-spacing: 0;
+  overflow: hidden;
   white-space: nowrap;
+}
+
+.rating-badge span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .rating-badge span:first-child {
@@ -661,7 +683,7 @@ button {
 }
 
 .is-list-open .selected-card {
-  bottom: calc(var(--floating-bottom) + 236px);
+  bottom: calc(var(--floating-bottom) + 148px);
 }
 
 .selected-card p {
@@ -738,16 +760,26 @@ button {
   color: var(--danger);
 }
 
-.bottom-dock {
-  --dock-indicator-x: 7px;
-  --dock-indicator-width: 78px;
-  --dock-indicator-opacity: 1;
+.dock-cluster {
   position: absolute;
   z-index: 30;
   left: 50%;
   bottom: var(--dock-bottom);
+  display: flex;
+  width: min(508px, calc(100vw - 24px));
+  align-items: center;
+  gap: 8px;
+  transform: translateX(-50%);
+}
+
+.bottom-dock {
+  --dock-indicator-x: 7px;
+  --dock-indicator-width: 78px;
+  --dock-indicator-opacity: 1;
+  position: relative;
+  flex: 1 1 auto;
   display: grid;
-  width: min(430px, calc(100vw - 32px));
+  min-width: 0;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 7px;
   padding: 7px;
@@ -755,8 +787,34 @@ button {
   background: var(--dock-surface);
   box-shadow: 0 1px 0 rgba(17, 24, 32, 0.04);
   touch-action: none;
-  transform: translateX(-50%);
   user-select: none;
+}
+
+.dock-search-button {
+  display: grid;
+  width: var(--dock-height);
+  height: var(--dock-height);
+  flex: 0 0 var(--dock-height);
+  place-items: center;
+  border-radius: 50%;
+  padding: 0;
+  color: #1c2630;
+}
+
+.dock-search-button:hover,
+.dock-search-button.is-active {
+  border-color: rgba(17, 24, 32, 0.16);
+  background: rgba(17, 24, 32, 0.04);
+}
+
+.dock-search-button svg {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
 }
 
 .dock-indicator {
@@ -1250,15 +1308,14 @@ button {
   .restaurant-panel {
     width: min(760px, calc(100vw - 32px));
     grid-template-areas:
-      "search"
       "meta"
       "list";
     grid-template-columns: minmax(0, 1fr);
-    max-height: 246px;
+    max-height: 160px;
   }
 
   .is-list-open .selected-card {
-    bottom: calc(var(--floating-bottom) + 254px);
+    bottom: calc(var(--floating-bottom) + 176px);
   }
 }
 
@@ -1305,20 +1362,14 @@ button {
     font-size: 29px;
   }
 
-  .topbar-menu-button {
-    width: 46px;
-    height: 46px;
-  }
-
   .restaurant-panel {
     right: 12px;
     bottom: var(--floating-bottom);
     left: 12px;
     width: auto;
-    max-height: 250px;
+    max-height: 172px;
     transform: translateY(10px);
     grid-template-areas:
-      "search"
       "meta"
       "list";
     grid-template-columns: minmax(0, 1fr);
@@ -1331,9 +1382,15 @@ button {
     transform: translateY(0);
   }
 
-  .bottom-dock {
+  .is-search-open .restaurant-panel {
+    bottom: calc(var(--floating-bottom) + 72px);
+  }
+
+  .dock-cluster {
     width: calc(100vw - 24px);
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .bottom-dock {
     padding: 7px;
   }
 
@@ -1399,7 +1456,7 @@ button {
   }
 
   .is-list-open .selected-card {
-    bottom: calc(var(--floating-bottom) + 268px);
+    bottom: calc(var(--floating-bottom) + 188px);
   }
 
   .form-grid {
@@ -1446,9 +1503,13 @@ button {
 
   .restaurant-panel {
     bottom: var(--floating-bottom);
-    max-height: 142px;
+    max-height: 128px;
     gap: 8px 10px;
     padding: 10px;
+  }
+
+  .is-search-open .restaurant-panel {
+    bottom: calc(var(--floating-bottom) + 70px);
   }
 
   .modal {
@@ -1542,7 +1603,7 @@ button {
   }
 
   .is-list-open .selected-card {
-    bottom: calc(var(--floating-bottom) + 158px);
+    bottom: calc(var(--floating-bottom) + 144px);
   }
 
   .selected-card h2 {
@@ -1585,7 +1646,7 @@ button {
   }
 
   .is-list-open .selected-card {
-    bottom: calc(var(--floating-bottom) + 162px);
+    bottom: calc(var(--floating-bottom) + 146px);
   }
 }
 

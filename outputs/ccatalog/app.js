@@ -116,6 +116,7 @@ document.addEventListener("DOMContentLoaded", init);
 async function init() {
   cacheElements();
   bindEvents();
+  setRestaurantPanelOpen(true);
   await loadRuntimeConfig();
   await initializeDataStore();
   await initializeMap();
@@ -145,6 +146,7 @@ function cacheElements() {
   els.mockMap = document.getElementById("mockMap");
   els.mockPins = document.getElementById("mockPins");
   els.restaurantPanel = document.getElementById("restaurantPanel");
+  els.searchPanel = document.getElementById("searchPanel");
   els.searchInput = document.getElementById("searchInput");
   els.restaurantList = document.getElementById("restaurantList");
   els.resultCount = document.getElementById("resultCount");
@@ -153,7 +155,7 @@ function cacheElements() {
   els.bottomDock = document.querySelector(".bottom-dock");
   els.dockIndicator = document.querySelector(".dock-indicator");
   els.addButton = document.getElementById("addButton");
-  els.panelToggle = document.getElementById("panelToggle");
+  els.searchToggle = document.getElementById("searchToggle");
   els.spotDialog = document.getElementById("spotDialog");
   els.spotForm = document.getElementById("spotForm");
   els.spotDialogTitle = document.getElementById("spotDialogTitle");
@@ -173,6 +175,10 @@ function cacheElements() {
 function bindEvents() {
   els.searchInput.addEventListener("input", (event) => {
     state.query = event.target.value.trim().toLowerCase();
+    if (state.selectedId) {
+      state.selectedId = null;
+    }
+    setRestaurantPanelOpen(true);
     render();
   });
 
@@ -182,12 +188,6 @@ function bindEvents() {
     });
   });
 
-  els.panelToggle.addEventListener("click", () => {
-    closeSpotDialog();
-    closeSelectedRestaurant();
-    setRestaurantPanelOpen(true);
-  });
-
   els.addButton.addEventListener("click", () => {
     if (isSpotDialogOpen()) {
       closeSpotDialog();
@@ -195,6 +195,19 @@ function bindEvents() {
     }
 
     openSpotDialog();
+  });
+
+  els.searchToggle.addEventListener("click", () => {
+    const nextOpen = !isSearchPanelOpen();
+    if (isSpotDialogOpen()) {
+      closeSpotDialog({ restorePanel: false });
+    }
+    closeSelectedRestaurant();
+    setRestaurantPanelOpen(true);
+    setSearchPanelOpen(nextOpen);
+    if (nextOpen) {
+      els.searchInput.focus();
+    }
   });
 
   els.bottomDock.addEventListener("click", handleDockClickCapture, true);
@@ -209,8 +222,13 @@ function bindEvents() {
 
     if (isSpotDialogOpen()) {
       closeSpotDialog();
+    } else if (isSearchPanelOpen()) {
+      setSearchPanelOpen(false);
+    } else if (state.selectedId) {
+      closeSelectedRestaurant();
+      setRestaurantPanelOpen(true);
     } else {
-      closeFloatingPanels();
+      setRestaurantPanelOpen(true);
     }
   });
 
@@ -242,18 +260,38 @@ function bindEvents() {
 function setRestaurantPanelOpen(isOpen) {
   els.restaurantPanel.classList.toggle("is-open", isOpen);
   els.restaurantPanel.setAttribute("aria-hidden", String(!isOpen));
-  els.panelToggle.classList.toggle("is-active", isOpen);
-  els.panelToggle.setAttribute("aria-expanded", String(isOpen));
   document.body.classList.toggle("is-list-open", isOpen);
+}
+
+function setSearchPanelOpen(isOpen) {
+  els.searchPanel.classList.toggle("is-open", isOpen);
+  els.searchPanel.setAttribute("aria-hidden", String(!isOpen));
+  els.searchToggle.classList.toggle("is-active", isOpen);
+  els.searchToggle.setAttribute("aria-expanded", String(isOpen));
+  document.body.classList.toggle("is-search-open", isOpen);
+}
+
+function isSearchPanelOpen() {
+  return els.searchPanel.classList.contains("is-open");
 }
 
 function closeFloatingPanels() {
   setRestaurantPanelOpen(false);
+  setSearchPanelOpen(false);
 }
 
 function setFilter(filter) {
   const nextFilter = filter || "all";
+  if (isSpotDialogOpen()) {
+    closeSpotDialog({ restorePanel: false });
+  }
+  if (state.selectedId) {
+    state.selectedId = null;
+  }
+  setRestaurantPanelOpen(true);
+
   if (state.filter === nextFilter) {
+    render();
     updateDockIndicator();
     return;
   }
@@ -403,7 +441,7 @@ function isSpotDialogOpen() {
   return els.spotDialog.classList.contains("is-open") || els.addButton.classList.contains("is-active");
 }
 
-function closeSpotDialog() {
+function closeSpotDialog({ restorePanel = true } = {}) {
   if (!isSpotDialogOpen()) return;
   if (spotDialogOpenFrame) {
     window.cancelAnimationFrame(spotDialogOpenFrame);
@@ -413,6 +451,9 @@ function closeSpotDialog() {
   els.spotDialog.setAttribute("aria-hidden", "true");
   els.addButton.classList.remove("is-active");
   els.addButton.setAttribute("aria-expanded", "false");
+  if (restorePanel && !state.selectedId) {
+    setRestaurantPanelOpen(true);
+  }
   updateDockIndicator();
 }
 
@@ -992,7 +1033,7 @@ async function handleSpotSubmit(event) {
     }
 
     state.selectedId = savedRestaurant.id;
-    closeSpotDialog();
+    closeSpotDialog({ restorePanel: false });
     render();
     state.map?.panTo({ lat: savedRestaurant.lat, lng: savedRestaurant.lng });
   } catch (error) {
@@ -1014,6 +1055,7 @@ async function deleteRestaurant(id) {
     if (state.selectedId === id) {
       state.selectedId = null;
     }
+    setRestaurantPanelOpen(true);
     render();
   } catch (error) {
     console.warn("restaurant delete failed", error);
