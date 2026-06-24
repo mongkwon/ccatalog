@@ -98,6 +98,7 @@ const state = {
   filter: "all",
   map: null,
   lastMapCoord: DEFAULT_CENTER,
+  placeSelection: null,
   store: null,
 };
 
@@ -163,6 +164,8 @@ function cacheElements() {
   els.nameInput = document.getElementById("nameInput");
   els.categoryInput = document.getElementById("categoryInput");
   els.areaInput = document.getElementById("areaInput");
+  els.latInput = document.getElementById("latInput");
+  els.lngInput = document.getElementById("lngInput");
   els.placeSearchButton = document.getElementById("placeSearchButton");
   els.placeResultList = document.getElementById("placeResultList");
   els.menuDraftInput = document.getElementById("menuDraftInput");
@@ -223,7 +226,7 @@ function bindEvents() {
   });
 
   els.placeSearchButton.addEventListener("click", searchPlaces);
-  els.nameInput.addEventListener("input", clearPlaceResults);
+  els.nameInput.addEventListener("input", handlePlaceNameInput);
 
   els.addMenuButton.addEventListener("click", () => {
     addMenuFromDraft();
@@ -595,19 +598,87 @@ function clearPlaceResults() {
   els.placeResultList.classList.add("hidden");
 }
 
+function handlePlaceNameInput() {
+  clearPlaceResults();
+  clearSelectedPlaceCandidate();
+}
+
+function clearSelectedPlaceCandidate() {
+  state.placeSelection = null;
+  els.areaInput.value = "";
+  clearCoordinateInputs();
+  clearPlaceValidation();
+}
+
 function selectPlaceCandidate(place) {
   const coord = resolvePlaceCoordinate(place);
+  if (!coord) {
+    renderPlaceMessage("좌표를 확인할 수 없습니다. 다른 결과를 선택해주세요");
+    return;
+  }
+
   els.nameInput.value = place.name;
   els.areaInput.value = place.roadAddress || place.address || "";
   setCategoryFromPlace(place.category);
+  fillCoordinateInputs(coord);
+  setSelectedPlaceCandidate(place, coord);
 
-  if (coord) {
-    fillCoordinateInputs(coord);
-    state.lastMapCoord = coord;
-    state.map?.panTo(coord);
-  }
+  state.lastMapCoord = coord;
+  state.map?.panTo(coord);
 
   clearPlaceResults();
+}
+
+function setSelectedPlaceCandidate(place, coord) {
+  state.placeSelection = {
+    name: String(place.name || "").trim(),
+    area: String(place.roadAddress || place.address || "").trim(),
+    lat: Number(coord.lat),
+    lng: Number(coord.lng),
+  };
+  clearPlaceValidation();
+}
+
+function setStoredPlaceCandidate(restaurant) {
+  const coord = { lat: Number(restaurant.lat), lng: Number(restaurant.lng) };
+  if (!restaurant.name || !isValidCoordinate(coord)) {
+    state.placeSelection = null;
+    return;
+  }
+
+  state.placeSelection = {
+    name: String(restaurant.name).trim(),
+    area: String(restaurant.area || "").trim(),
+    lat: coord.lat,
+    lng: coord.lng,
+  };
+  clearPlaceValidation();
+}
+
+function isCurrentPlaceSelectionValid() {
+  const selectedPlace = state.placeSelection;
+  if (!selectedPlace) return false;
+
+  const lat = Number(els.latInput.value);
+  const lng = Number(els.lngInput.value);
+  return (
+    els.nameInput.value.trim() === selectedPlace.name &&
+    isValidCoordinate({ lat, lng }) &&
+    Math.abs(lat - selectedPlace.lat) < 0.000001 &&
+    Math.abs(lng - selectedPlace.lng) < 0.000001
+  );
+}
+
+function requireSelectedPlaceCandidate() {
+  const message = "장소 검색 결과에서 식당을 선택해주세요";
+  renderPlaceMessage(message);
+  els.nameInput.setCustomValidity(message);
+  els.nameInput.reportValidity();
+  els.nameInput.focus();
+}
+
+function clearPlaceValidation() {
+  els.nameInput.setCustomValidity("");
 }
 
 function resolvePlaceCoordinate(place) {
@@ -891,6 +962,8 @@ function openSpotDialog(restaurant = null) {
   closeSelectedRestaurant();
   els.spotForm.reset();
   clearPlaceResults();
+  clearPlaceValidation();
+  state.placeSelection = null;
   document.getElementById("spotId").value = restaurant?.id ?? "";
   els.spotDialogTitle.textContent = restaurant ? "맛집 수정" : "맛집 추가";
 
@@ -900,6 +973,7 @@ function openSpotDialog(restaurant = null) {
     els.areaInput.value = restaurant.area;
     renderMenuInputs(restaurant.menus);
     fillCoordinateInputs({ lat: restaurant.lat, lng: restaurant.lng });
+    setStoredPlaceCandidate(restaurant);
     document.getElementById("memoInput").value = restaurant.memo;
     const ratingInput = els.spotForm.querySelector(`[name="rating"][value="${restaurant.rating}"]`);
     if (ratingInput) ratingInput.checked = true;
@@ -909,7 +983,7 @@ function openSpotDialog(restaurant = null) {
   } else {
     els.areaInput.value = "";
     renderMenuInputs([]);
-    fillCoordinateInputs(state.map?.getCenter() ?? state.lastMapCoord);
+    clearCoordinateInputs();
   }
 
   openAnimatedSpotDialog();
@@ -925,8 +999,13 @@ async function handleSpotSubmit(event) {
   const lng = Number(formData.get("lng"));
   const existingRestaurant = state.restaurants.find((restaurant) => restaurant.id === id);
 
+  if (!isCurrentPlaceSelectionValid()) {
+    requireSelectedPlaceCandidate();
+    return;
+  }
+
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-    fillCoordinateInputs(state.map?.getCenter() ?? DEFAULT_CENTER);
+    renderPlaceMessage("선택한 장소 좌표를 확인하지 못했습니다");
     return;
   }
 
@@ -994,8 +1073,13 @@ function fillCoordinateInputs(coord) {
   const lat = Number(coord.lat);
   const lng = Number(coord.lng);
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
-  document.getElementById("latInput").value = lat.toFixed(6);
-  document.getElementById("lngInput").value = lng.toFixed(6);
+  els.latInput.value = lat.toFixed(6);
+  els.lngInput.value = lng.toFixed(6);
+}
+
+function clearCoordinateInputs() {
+  els.latInput.value = "";
+  els.lngInput.value = "";
 }
 
 function ratingBadge(rating) {
