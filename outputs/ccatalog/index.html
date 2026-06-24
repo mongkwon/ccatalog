@@ -6,8 +6,8 @@
     <title>까탈로그</title>
     <link rel="icon" href="data:," />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" />
-    <link rel="stylesheet" href="./styles.css?v=20260624-inline-search" />
-    <script defer src="./app.js?v=20260624-inline-search"></script>
+    <link rel="stylesheet" href="./styles.css?v=20260624-modal-clean" />
+    <script defer src="./app.js?v=20260624-modal-clean"></script>
   </head>
   <body>
     <main class="app-shell">
@@ -109,15 +109,7 @@
       <form id="spotForm" class="modal-card">
         <input type="hidden" id="spotId" name="id" />
         <div class="modal-header">
-          <div>
-            <span class="eyebrow">맛집</span>
-            <h2 id="spotDialogTitle">맛집 추가</h2>
-          </div>
-          <button class="icon-button ghost" type="button" data-close-dialog="spotDialog" aria-label="닫기">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M18 6 6 18M6 6l12 12" />
-            </svg>
-          </button>
+          <h2 id="spotDialogTitle">맛집 추가</h2>
         </div>
 
         <div class="form-grid">
@@ -202,7 +194,6 @@
         </div>
 
         <div class="modal-actions">
-          <button class="text-button" type="button" data-close-dialog="spotDialog">취소</button>
           <button class="primary-button" type="submit">저장</button>
         </div>
       </form>
