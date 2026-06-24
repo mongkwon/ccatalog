@@ -110,6 +110,7 @@ const dockDragState = {
   suppressClick: false,
 };
 let spotDialogOpenFrame = null;
+let dockIndicatorBloomTimer = null;
 
 document.addEventListener("DOMContentLoaded", init);
 
@@ -286,6 +287,9 @@ function setSearchPanelOpen(isOpen) {
   if (!isOpen && document.activeElement === els.searchInput) {
     els.searchInput.blur();
   }
+  if (isOpen) {
+    stopDockIndicatorBloom();
+  }
   updateDockIndicator();
 }
 
@@ -311,6 +315,7 @@ function setFilter(filter) {
   if (state.filter === nextFilter) {
     render();
     updateDockIndicator();
+    animateDockIndicator();
     return;
   }
 
@@ -319,6 +324,7 @@ function setFilter(filter) {
     button.classList.toggle("is-active", button.dataset.filter === nextFilter);
   });
   render();
+  animateDockIndicator();
 }
 
 function getDockButtons() {
@@ -353,6 +359,23 @@ function setDockIndicatorToIndex(index) {
   els.bottomDock.style.setProperty("--dock-indicator-opacity", "1");
 }
 
+function animateDockIndicator() {
+  if (isSearchPanelOpen() || dockDragState.isDragging) return;
+  stopDockIndicatorBloom();
+  // Force a style flush so repeated taps replay the bloom animation.
+  void els.bottomDock.offsetWidth;
+  els.bottomDock.classList.add("is-indicator-bloom");
+  dockIndicatorBloomTimer = window.setTimeout(stopDockIndicatorBloom, 760);
+}
+
+function stopDockIndicatorBloom() {
+  if (dockIndicatorBloomTimer) {
+    window.clearTimeout(dockIndicatorBloomTimer);
+    dockIndicatorBloomTimer = null;
+  }
+  els.bottomDock?.classList.remove("is-indicator-bloom");
+}
+
 function handleDockClickCapture(event) {
   if (!dockDragState.suppressClick) return;
   event.preventDefault();
@@ -369,6 +392,7 @@ function handleDockPointerDown(event) {
   dockDragState.startY = event.clientY;
   dockDragState.isDragging = false;
   els.bottomDock.setPointerCapture?.(event.pointerId);
+  animateDockIndicator();
 }
 
 function handleDockPointerMove(event) {
