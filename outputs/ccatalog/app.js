@@ -1933,7 +1933,7 @@ class NaverMapAdapter {
         title: restaurant.name,
         icon: {
           content: pinHtml(restaurant, selectedId),
-          anchor: new window.naver.maps.Point(24, 58),
+          anchor: new window.naver.maps.Point(22, 22),
         },
       });
       window.naver.maps.Event.addListener(marker, "click", () => onSelect(restaurant.id));

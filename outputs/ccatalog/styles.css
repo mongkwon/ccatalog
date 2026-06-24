@@ -846,6 +846,8 @@ body.is-admin-mode .brand-add-button {
   align-items: center;
   gap: var(--dock-gap);
   transform: translateX(-50%);
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
 }
 
 .bottom-dock {
@@ -870,6 +872,9 @@ body.is-admin-mode .brand-add-button {
     flex-basis var(--dock-motion),
     border-radius var(--dock-motion);
   user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
 }
 
 .dock-cluster.is-search-mode .bottom-dock {
@@ -899,6 +904,15 @@ body.is-admin-mode .brand-add-button {
     opacity var(--dock-fade),
     transform var(--dock-motion),
     background var(--dock-fade);
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+}
+
+.dock-search-button:focus,
+.dock-search-button:focus-visible,
+.dock-search-button:active {
+  outline: 0;
+  background: transparent;
 }
 
 .search-panel.is-open .dock-search-button {
@@ -943,6 +957,16 @@ body.is-admin-mode .brand-add-button {
     visibility 0s linear 220ms,
     background var(--dock-fade),
     border-color var(--dock-fade);
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+}
+
+.dock-mode-button:focus,
+.dock-mode-button:focus-visible,
+.dock-mode-button:active {
+  outline: 0;
+  border-color: transparent;
+  background: transparent;
 }
 
 .dock-mode-button svg {
@@ -1041,6 +1065,16 @@ body.is-admin-mode .brand-add-button {
     opacity 160ms ease,
     transform var(--dock-fade),
     visibility 0s linear 0s;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+}
+
+.dock-filter-button:focus,
+.dock-filter-button:focus-visible,
+.dock-filter-button:active {
+  outline: 0;
+  border-color: transparent;
+  background: transparent;
 }
 
 .bottom-dock.is-pressing .dock-filter-button,
@@ -1082,9 +1116,9 @@ body.is-admin-mode .brand-add-button {
   position: relative;
   z-index: 6;
   display: grid;
-  width: 48px;
-  height: 58px;
-  place-items: start center;
+  width: 44px;
+  height: 44px;
+  place-items: center;
   border: 0;
   padding: 0;
   background: transparent;
@@ -1092,15 +1126,7 @@ body.is-admin-mode .brand-add-button {
 
 .mock-pins .pin-marker {
   position: absolute;
-  transform: translate(-50%, -100%);
-}
-
-.pin-marker::after {
-  width: 1px;
-  height: 16px;
-  margin-top: -1px;
-  content: "";
-  background: linear-gradient(to bottom, rgba(17, 24, 32, 0.24), transparent);
+  transform: translate(-50%, -50%);
 }
 
 .pin-head {
