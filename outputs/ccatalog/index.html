@@ -5,12 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>까탈로그</title>
     <link rel="icon" href="data:," />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Noto+Serif+KR:wght@500;700;900&display=swap"
-      rel="stylesheet"
-    />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" />
     <link rel="stylesheet" href="./styles.css" />
     <script defer src="./app.js"></script>
   </head>
@@ -121,7 +116,7 @@
         </div>
 
         <div class="form-grid">
-          <label class="field wide">
+          <label class="field span-2">
             <span>이름</span>
             <input id="nameInput" name="name" type="text" required maxlength="40" />
           </label>
@@ -145,7 +140,7 @@
             <input id="areaInput" name="area" type="text" maxlength="40" />
           </label>
 
-          <fieldset class="rating-field wide">
+          <fieldset class="rating-field span-2">
             <legend>별</legend>
             <label>
               <input type="radio" name="rating" value="0" checked />
@@ -165,12 +160,12 @@
             </label>
           </fieldset>
 
-          <label class="field wide">
+          <label class="field span-2">
             <span>추천메뉴</span>
             <input id="menusInput" name="menus" type="text" maxlength="120" placeholder="쉼표로 구분" />
           </label>
 
-          <fieldset class="delivery-field wide">
+          <fieldset class="delivery-field span-2">
             <legend>배달가능여부</legend>
             <label>
               <input type="checkbox" name="deliveryApps" value="baemin" />
@@ -189,7 +184,7 @@
           <input id="latInput" name="lat" type="hidden" />
           <input id="lngInput" name="lng" type="hidden" />
 
-          <div class="location-field wide">
+          <div class="location-field span-2">
             <span>위치</span>
             <div class="location-control">
               <div class="location-readout">
@@ -200,9 +195,9 @@
             </div>
           </div>
 
-          <label class="field wide">
+          <label class="field span-2">
             <span>메모</span>
-            <textarea id="memoInput" name="memo" rows="3" maxlength="180"></textarea>
+            <textarea id="memoInput" name="memo" rows="2" maxlength="180"></textarea>
           </label>
         </div>
 

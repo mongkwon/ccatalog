@@ -18,7 +18,9 @@
   --danger: #c84634;
   color-scheme: light;
   font-family:
-    "Noto Sans KR",
+    "Pretendard",
+    "SF Pro Text",
+    "Apple SD Gothic Neo",
     ui-sans-serif,
     system-ui,
     -apple-system,
@@ -261,7 +263,6 @@ button {
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.62),
     0 0 0 1px rgba(255, 255, 255, 0.28);
-  font-family: "Noto Serif KR", serif;
   font-size: 18px;
   font-weight: 900;
 }
@@ -272,7 +273,6 @@ button {
 }
 
 .brand h1 {
-  font-family: "Noto Serif KR", serif;
   font-size: 21px;
   font-weight: 900;
   line-height: 1.05;
@@ -466,7 +466,6 @@ button {
 .panel-meta strong {
   flex: 0 0 auto;
   color: var(--ink);
-  font-family: "Noto Serif KR", serif;
   font-size: 20px;
   font-weight: 900;
 }
@@ -537,7 +536,6 @@ button {
 .selected-card h2 {
   margin: 0;
   overflow: hidden;
-  font-family: "Noto Serif KR", serif;
   font-weight: 900;
   letter-spacing: 0;
   text-overflow: ellipsis;
@@ -599,7 +597,7 @@ button {
 }
 
 .rating-badge span:first-child {
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: inherit;
   font-size: 10px;
   line-height: 1;
 }
@@ -749,28 +747,40 @@ button {
   position: absolute;
   z-index: 30;
   left: 50%;
-  bottom: 18px;
+  bottom: 16px;
   display: grid;
-  grid-template-columns: repeat(3, 54px);
-  gap: 8px;
-  padding: 8px;
+  grid-template-columns: 74px 74px 86px;
+  gap: 7px;
+  padding: 7px;
   border-radius: 999px;
+  background:
+    radial-gradient(ellipse at 18% 8%, rgba(255, 255, 255, 0.78), transparent 45%),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.52), rgba(255, 255, 255, 0.18) 54%, rgba(205, 249, 255, 0.22)),
+    rgba(255, 255, 255, 0.24);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.2),
+    0 1px 0 rgba(255, 255, 255, 0.44);
   transform: translateX(-50%);
 }
 
 .dock-button {
   position: relative;
   display: grid;
-  width: 54px;
-  height: 54px;
+  width: 100%;
+  height: 48px;
   place-items: center;
   border: 1px solid rgba(255, 255, 255, 0.84);
-  border-radius: 50%;
+  border-radius: 999px;
   color: #063342;
-  background: rgba(255, 255, 255, 0.28);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.64);
-  backdrop-filter: blur(16px) saturate(1.45);
-  -webkit-backdrop-filter: blur(16px) saturate(1.45);
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.54), rgba(255, 255, 255, 0.22)),
+    rgba(255, 255, 255, 0.18);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.16);
+  backdrop-filter: blur(22px) saturate(1.7) contrast(1.04);
+  -webkit-backdrop-filter: blur(22px) saturate(1.7) contrast(1.04);
 }
 
 .dock-button:hover,
@@ -794,10 +804,10 @@ button {
   color: #063342;
   background:
     var(--glass-sheen),
-    linear-gradient(145deg, rgba(225, 253, 255, 0.9), rgba(71, 207, 229, 0.64));
+    linear-gradient(145deg, rgba(236, 254, 255, 0.96), rgba(67, 205, 228, 0.68));
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.54),
-    0 0 0 6px rgba(124, 226, 242, 0.14);
+    inset 0 1px 0 rgba(255, 255, 255, 0.72),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.18);
 }
 
 .dock-button-primary:hover {
@@ -861,7 +871,7 @@ button {
   max-width: 36px;
   align-items: center;
   justify-content: center;
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: inherit;
   font-size: 16px;
   font-weight: 900;
   line-height: 1;
@@ -899,16 +909,17 @@ button {
 .modal {
   position: fixed;
   z-index: 60;
-  top: 50%;
+  top: auto;
+  bottom: 104px;
   left: 50%;
-  width: min(560px, calc(100vw - 28px));
-  max-height: min(720px, calc(100dvh - 72px));
-  overflow: auto;
+  width: min(840px, calc(100vw - 32px));
+  max-height: calc(100dvh - 126px);
+  overflow: visible;
   margin: 0;
   padding: 0;
   border: 0;
   background: transparent;
-  transform: translate(-50%, -50%);
+  transform: translateX(-50%);
 }
 
 .modal::backdrop {
@@ -920,8 +931,8 @@ button {
 .modal-card {
   width: 100%;
   overflow: visible;
-  padding: 18px;
-  border-radius: 28px;
+  padding: 14px 16px;
+  border-radius: 30px;
 }
 
 .is-picking-location .map-host,
@@ -931,16 +942,15 @@ button {
 
 .modal-header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 18px;
+  gap: 12px;
+  margin-bottom: 12px;
 }
 
 .modal-header h2 {
-  margin: 2px 0 0;
-  font-family: "Noto Serif KR", serif;
-  font-size: 24px;
+  margin: 1px 0 0;
+  font-size: 21px;
   letter-spacing: 0;
 }
 
@@ -952,8 +962,8 @@ button {
 
 .form-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
+  grid-template-columns: 1.2fr 1.2fr 0.9fr 0.9fr;
+  gap: 9px;
 }
 
 .field,
@@ -961,7 +971,7 @@ button {
 .delivery-field,
 .location-field {
   display: grid;
-  gap: 7px;
+  gap: 5px;
 }
 
 .field span,
@@ -969,7 +979,7 @@ button {
 .delivery-field legend,
 .location-field > span {
   color: var(--soft-ink);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 900;
 }
 
@@ -988,13 +998,15 @@ button {
 
 .field input,
 .field select {
-  height: 44px;
-  padding: 0 14px;
+  height: 38px;
+  padding: 0 12px;
 }
 
 .field textarea {
-  resize: vertical;
-  padding: 12px 14px;
+  height: 38px;
+  overflow: hidden;
+  resize: none;
+  padding: 9px 12px;
 }
 
 .field input:focus,
@@ -1015,10 +1027,10 @@ button {
 .location-readout {
   display: grid;
   min-width: 0;
-  min-height: 44px;
+  min-height: 38px;
   align-content: center;
   gap: 2px;
-  padding: 7px 14px;
+  padding: 5px 12px;
   border: 1px solid rgba(17, 24, 32, 0.12);
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.3);
@@ -1044,6 +1056,10 @@ button {
 
 .wide {
   grid-column: 1 / -1;
+}
+
+.span-2 {
+  grid-column: span 2;
 }
 
 .rating-field,
@@ -1082,13 +1098,13 @@ button {
 .rating-field span,
 .delivery-field span {
   display: grid;
-  min-height: 42px;
+  min-height: 36px;
   place-items: center;
   border: 1px solid rgba(17, 24, 32, 0.1);
   border-radius: 999px;
   color: var(--soft-ink);
   background: rgba(255, 255, 255, 0.3);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 900;
 }
 
@@ -1112,14 +1128,11 @@ button {
 }
 
 .modal-actions {
-  position: sticky;
-  bottom: 0;
   display: flex;
   justify-content: flex-end;
   gap: 8px;
-  margin-top: 18px;
-  padding-top: 14px;
-  background: linear-gradient(to bottom, rgba(255, 255, 255, 0), rgba(245, 253, 255, 0.56) 38%);
+  margin-top: 10px;
+  padding-top: 0;
 }
 
 @media (max-width: 940px) {
@@ -1204,13 +1217,13 @@ button {
 
   .bottom-dock {
     bottom: 12px;
-    grid-template-columns: repeat(3, 52px);
+    grid-template-columns: 68px 68px 78px;
     padding: 7px;
   }
 
   .dock-button {
-    width: 52px;
-    height: 52px;
+    width: 100%;
+    height: 46px;
   }
 
   .search-row {
@@ -1289,29 +1302,39 @@ button {
   }
 
   .form-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
   }
 
   .rating-field {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
   .delivery-field {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .modal {
-    top: 50%;
+    top: auto;
+    bottom: 88px;
     right: 12px;
     left: 12px;
     width: auto;
-    max-height: calc(100dvh - 32px);
-    transform: translateY(-50%);
+    max-height: calc(100dvh - 108px);
+    transform: none;
   }
 
   .modal-card {
-    padding: 16px;
+    padding: 12px;
     border-radius: 26px;
+  }
+
+  .modal-header {
+    margin-bottom: 10px;
+  }
+
+  .modal-header h2 {
+    font-size: 19px;
   }
 }
 
@@ -1329,6 +1352,47 @@ button {
 
   .search-panel {
     bottom: 96px;
+  }
+
+  .modal {
+    bottom: 94px;
+    max-height: calc(100dvh - 112px);
+  }
+
+  .modal-card {
+    padding: 12px;
+  }
+
+  .form-grid {
+    gap: 8px;
+  }
+
+  .field input,
+  .field select,
+  .field textarea {
+    border-radius: 16px;
+  }
+
+  .field input,
+  .field select,
+  .field textarea,
+  .location-readout {
+    min-height: 34px;
+  }
+
+  .field input,
+  .field select {
+    height: 34px;
+  }
+
+  .field textarea {
+    height: 34px;
+  }
+
+  .rating-field span,
+  .delivery-field span {
+    min-height: 32px;
+    font-size: 11px;
   }
 
   .search-row,
