@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>까탈로그</title>
+    <link rel="icon" href="data:," />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Noto+Serif+KR:wght@500;700;900&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+    <script defer src="./app.js"></script>
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="map-stage" aria-label="까탈로그 맛집 지도">
+        <div id="map" class="map-host" aria-label="지도"></div>
+
+        <div id="mockMap" class="mock-map hidden" aria-label="샘플 지도">
+          <div class="river"></div>
+          <div class="road road-a"></div>
+          <div class="road road-b"></div>
+          <div class="road road-c"></div>
+          <div class="road road-d"></div>
+          <div class="road road-e"></div>
+          <div class="district district-1">연남</div>
+          <div class="district district-2">성수</div>
+          <div class="district district-3">을지로</div>
+          <div class="district district-4">논현</div>
+          <div id="mockPins" class="mock-pins"></div>
+        </div>
+
+        <header class="topbar">
+          <div class="brand">
+            <span class="brand-mark" aria-hidden="true">까</span>
+            <div>
+              <h1>까탈로그</h1>
+              <p>취향에 엄격한 맛집 지도</p>
+            </div>
+          </div>
+
+          <div class="top-actions">
+            <span id="providerBadge" class="provider-badge">지도 준비</span>
+          </div>
+        </header>
+
+        <aside class="restaurant-panel" aria-label="맛집 목록">
+          <div class="search-row">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="m21 21-5-5m2-5a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z" />
+            </svg>
+            <input id="searchInput" type="search" placeholder="맛집, 동네, 메뉴" autocomplete="off" />
+          </div>
+
+          <div class="filter-row" role="group" aria-label="별 필터">
+            <button class="filter-chip is-active" type="button" data-filter="all">전체</button>
+            <button class="filter-chip" type="button" data-filter="0">소개</button>
+            <button class="filter-chip" type="button" data-filter="1">1스타</button>
+            <button class="filter-chip" type="button" data-filter="2">2스타</button>
+            <button class="filter-chip" type="button" data-filter="3">3스타</button>
+          </div>
+
+          <div class="panel-meta">
+            <strong id="resultCount">0곳</strong>
+            <span id="ratingSummary">소개 0 · 1스타 0 · 2스타 0 · 3스타 0</span>
+          </div>
+
+          <div id="restaurantList" class="restaurant-list"></div>
+        </aside>
+
+        <article id="selectedCard" class="selected-card hidden" aria-live="polite"></article>
+
+        <button id="addButton" class="fab" type="button" title="맛집 추가" aria-label="맛집 추가">
+          <span aria-hidden="true">+</span>
+        </button>
+      </section>
+    </main>
+
+    <dialog id="spotDialog" class="modal">
+      <form id="spotForm" class="modal-card">
+        <input type="hidden" id="spotId" name="id" />
+        <div class="modal-header">
+          <div>
+            <span class="eyebrow">맛집</span>
+            <h2 id="spotDialogTitle">맛집 추가</h2>
+          </div>
+          <button class="icon-button ghost" type="button" data-close-dialog="spotDialog" aria-label="닫기">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M18 6 6 18M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <div class="form-grid">
+          <label class="field wide">
+            <span>이름</span>
+            <input id="nameInput" name="name" type="text" required maxlength="40" />
+          </label>
+
+          <label class="field">
+            <span>분류</span>
+            <select id="categoryInput" name="category">
+              <option>한식</option>
+              <option>일식</option>
+              <option>중식</option>
+              <option>양식</option>
+              <option>분식</option>
+              <option>카페</option>
+              <option>바</option>
+              <option>기타</option>
+            </select>
+          </label>
+
+          <label class="field">
+            <span>동네</span>
+            <input id="areaInput" name="area" type="text" maxlength="40" />
+          </label>
+
+          <fieldset class="rating-field wide">
+            <legend>별</legend>
+            <label>
+              <input type="radio" name="rating" value="0" checked />
+              <span>소개</span>
+            </label>
+            <label>
+              <input type="radio" name="rating" value="1" />
+              <span>1스타</span>
+            </label>
+            <label>
+              <input type="radio" name="rating" value="2" />
+              <span>2스타</span>
+            </label>
+            <label>
+              <input type="radio" name="rating" value="3" />
+              <span>3스타</span>
+            </label>
+          </fieldset>
+
+          <label class="field wide">
+            <span>추천메뉴</span>
+            <input id="menusInput" name="menus" type="text" maxlength="120" placeholder="쉼표로 구분" />
+          </label>
+
+          <fieldset class="delivery-field wide">
+            <legend>배달가능여부</legend>
+            <label>
+              <input type="checkbox" name="deliveryApps" value="baemin" />
+              <span>배달의민족</span>
+            </label>
+            <label>
+              <input type="checkbox" name="deliveryApps" value="coupangEats" />
+              <span>쿠팡이츠</span>
+            </label>
+            <label>
+              <input type="checkbox" name="deliveryApps" value="yogiyo" />
+              <span>요기요</span>
+            </label>
+          </fieldset>
+
+          <input id="latInput" name="lat" type="hidden" />
+          <input id="lngInput" name="lng" type="hidden" />
+
+          <div class="location-field wide">
+            <span>위치</span>
+            <div class="location-control">
+              <div class="location-readout">
+                <strong id="locationStatus">선택 위치</strong>
+                <small id="locationSummary">37.566535, 126.977969</small>
+              </div>
+              <button id="useCenterButton" class="secondary-button" type="button">지도 중심</button>
+            </div>
+          </div>
+
+          <label class="field wide">
+            <span>메모</span>
+            <textarea id="memoInput" name="memo" rows="3" maxlength="180"></textarea>
+          </label>
+        </div>
+
+        <div class="modal-actions">
+          <button class="text-button" type="button" data-close-dialog="spotDialog">취소</button>
+          <button class="primary-button" type="submit">저장</button>
+        </div>
+      </form>
+    </dialog>
+
+  </body>
+</html>

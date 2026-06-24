@@ -1,0 +1,819 @@
+const STORAGE_KEY = "ccatalog.restaurants.v1";
+const runtimeConfig = {
+  naverMapKey: "",
+};
+const DEFAULT_CENTER = { lat: 37.566535, lng: 126.977969 };
+const MOCK_BOUNDS = {
+  latMin: 37.47,
+  latMax: 37.62,
+  lngMin: 126.86,
+  lngMax: 127.13,
+};
+
+const RATING_META = {
+  0: { label: "소개", icon: "○", stars: "" },
+  1: { label: "1스타", icon: "★", stars: "★" },
+  2: { label: "2스타", icon: "★", stars: "★★" },
+  3: { label: "3스타", icon: "★", stars: "★★★" },
+};
+
+const DELIVERY_APPS = [
+  { id: "baemin", label: "배달의민족", shortLabel: "배민" },
+  { id: "coupangEats", label: "쿠팡이츠", shortLabel: "쿠팡이츠" },
+  { id: "yogiyo", label: "요기요", shortLabel: "요기요" },
+];
+
+const seedRestaurants = [
+  {
+    id: "seed-1",
+    name: "까탈면옥",
+    category: "한식",
+    rating: 3,
+    area: "중구 을지로",
+    lat: 37.5669,
+    lng: 126.9928,
+    menus: ["물냉면", "제육"],
+    deliveryApps: ["baemin", "yogiyo"],
+    memo: "육향이 또렷하고 마무리가 깔끔한 냉면집.",
+  },
+  {
+    id: "seed-2",
+    name: "연남구움",
+    category: "카페",
+    rating: 1,
+    area: "마포구 연남",
+    lat: 37.5628,
+    lng: 126.9237,
+    menus: ["소금빵", "필터커피"],
+    deliveryApps: ["coupangEats"],
+    memo: "가볍게 들르기 좋은 구움과자와 커피.",
+  },
+  {
+    id: "seed-3",
+    name: "성수면가",
+    category: "중식",
+    rating: 2,
+    area: "성동구 성수",
+    lat: 37.5447,
+    lng: 127.0557,
+    menus: ["탄탄면", "가지튀김"],
+    deliveryApps: ["baemin", "coupangEats"],
+    memo: "매콤한 소스와 식감 좋은 사이드가 강점.",
+  },
+  {
+    id: "seed-4",
+    name: "논현초밥",
+    category: "일식",
+    rating: 0,
+    area: "강남구 논현",
+    lat: 37.5114,
+    lng: 127.0285,
+    menus: ["점심 오마카세", "고등어봉초밥"],
+    deliveryApps: [],
+    memo: "별을 줄 정도는 아니지만 동네 기록에 남길 만한 곳.",
+  },
+  {
+    id: "seed-5",
+    name: "망원국수",
+    category: "분식",
+    rating: 1,
+    area: "마포구 망원",
+    lat: 37.5552,
+    lng: 126.9051,
+    menus: ["비빔국수", "김밥"],
+    deliveryApps: ["baemin", "yogiyo"],
+    memo: "회전이 빠르고 점심 선택지로 안정적.",
+  },
+];
+
+const state = {
+  restaurants: loadRestaurants(),
+  selectedId: null,
+  query: "",
+  filter: "all",
+  map: null,
+  lastMapCoord: DEFAULT_CENTER,
+};
+
+const els = {};
+
+document.addEventListener("DOMContentLoaded", init);
+
+async function init() {
+  cacheElements();
+  bindEvents();
+  await loadRuntimeConfig();
+  await initializeMap();
+  render();
+}
+
+async function loadRuntimeConfig() {
+  try {
+    const response = await fetch("./config.json", { cache: "no-store" });
+    if (!response.ok) {
+      return;
+    }
+
+    const config = await response.json();
+    runtimeConfig.naverMapKey = typeof config.naverMapKey === "string" ? config.naverMapKey.trim() : "";
+  } catch {
+    runtimeConfig.naverMapKey = "";
+  }
+}
+
+function cacheElements() {
+  els.map = document.getElementById("map");
+  els.mockMap = document.getElementById("mockMap");
+  els.mockPins = document.getElementById("mockPins");
+  els.providerBadge = document.getElementById("providerBadge");
+  els.searchInput = document.getElementById("searchInput");
+  els.restaurantList = document.getElementById("restaurantList");
+  els.resultCount = document.getElementById("resultCount");
+  els.ratingSummary = document.getElementById("ratingSummary");
+  els.selectedCard = document.getElementById("selectedCard");
+  els.addButton = document.getElementById("addButton");
+  els.spotDialog = document.getElementById("spotDialog");
+  els.spotForm = document.getElementById("spotForm");
+  els.spotDialogTitle = document.getElementById("spotDialogTitle");
+  els.useCenterButton = document.getElementById("useCenterButton");
+  els.locationSummary = document.getElementById("locationSummary");
+  els.locationStatus = document.getElementById("locationStatus");
+  els.filterButtons = [...document.querySelectorAll(".filter-chip")];
+}
+
+function bindEvents() {
+  els.searchInput.addEventListener("input", (event) => {
+    state.query = event.target.value.trim().toLowerCase();
+    render();
+  });
+
+  els.filterButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      state.filter = button.dataset.filter;
+      els.filterButtons.forEach((item) => item.classList.toggle("is-active", item === button));
+      render();
+    });
+  });
+
+  els.addButton.addEventListener("click", () => openSpotDialog());
+
+  document.querySelectorAll("[data-close-dialog]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const dialog = document.getElementById(button.dataset.closeDialog);
+      dialog.close();
+    });
+  });
+
+  els.spotDialog.addEventListener("click", (event) => {
+    if (event.target === els.spotDialog) {
+      els.spotDialog.close();
+    }
+  });
+
+  els.spotDialog.addEventListener("close", () => {
+    document.body.classList.remove("is-picking-location");
+  });
+
+  els.useCenterButton.addEventListener("click", () => {
+    const coord = state.map?.getCenter() ?? state.lastMapCoord;
+    fillCoordinateInputs(coord, "지도 중심");
+  });
+
+  els.spotForm.addEventListener("submit", handleSpotSubmit);
+}
+
+async function initializeMap() {
+  setProviderBadge("네이버 연결", "loading");
+  state.map?.destroy?.();
+  state.map = null;
+
+  try {
+    if (!runtimeConfig.naverMapKey) {
+      throw new Error("네이버 지도 키가 설정되지 않았습니다");
+    }
+
+    const adapter = new NaverMapAdapter(els.map, els.mockMap, runtimeConfig.naverMapKey);
+    await activateMap(adapter);
+    setProviderBadge(adapter.label, adapter.type);
+  } catch (error) {
+    console.warn("naver map failed", error);
+    const fallback = new MockMapAdapter(els.map, els.mockMap, els.mockPins);
+    await activateMap(fallback);
+    setProviderBadge("네이버 실패", "error");
+  }
+}
+
+async function activateMap(adapter) {
+  await adapter.load();
+  adapter.setClickHandler((coord) => {
+    state.lastMapCoord = coord;
+    if (els.spotDialog.open) {
+      fillCoordinateInputs(coord);
+    }
+  });
+  state.map = adapter;
+}
+
+function render() {
+  const visibleRestaurants = getVisibleRestaurants();
+  renderList(visibleRestaurants);
+  renderMeta(visibleRestaurants);
+  renderSelectedCard(visibleRestaurants);
+  state.map?.render(visibleRestaurants, state.selectedId, selectRestaurant);
+}
+
+function getVisibleRestaurants() {
+  const query = state.query;
+  return state.restaurants
+    .filter((restaurant) => {
+      const matchesFilter = state.filter === "all" || String(restaurant.rating) === state.filter;
+      const haystack = [
+        restaurant.name,
+        restaurant.category,
+        restaurant.area,
+        restaurant.memo,
+        ...restaurant.menus,
+        ...deliveryLabels(restaurant.deliveryApps),
+      ]
+        .join(" ")
+        .toLowerCase();
+      return matchesFilter && (!query || haystack.includes(query));
+    })
+    .sort((a, b) => b.rating - a.rating || a.name.localeCompare(b.name, "ko"));
+}
+
+function renderList(restaurants) {
+  els.restaurantList.innerHTML = "";
+
+  if (restaurants.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "empty-state";
+    empty.textContent = "조건에 맞는 맛집이 없습니다";
+    els.restaurantList.append(empty);
+    return;
+  }
+
+  const fragment = document.createDocumentFragment();
+  restaurants.forEach((restaurant) => {
+    const preview = [restaurant.menus.slice(0, 2).join(" · "), deliverySummary(restaurant.deliveryApps)]
+      .filter(Boolean)
+      .join(" · ");
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = `restaurant-item${restaurant.id === state.selectedId ? " is-selected" : ""}`;
+    button.innerHTML = `
+      <div class="item-head">
+        <div>
+          <h3>${escapeHtml(restaurant.name)}</h3>
+          <p class="item-sub">${escapeHtml([restaurant.category, restaurant.area].filter(Boolean).join(" · "))}</p>
+        </div>
+        ${ratingBadge(restaurant.rating)}
+      </div>
+      ${preview ? `<p class="item-menu-preview">${escapeHtml(preview)}</p>` : ""}
+    `;
+    button.addEventListener("click", () => selectRestaurant(restaurant.id));
+    fragment.append(button);
+  });
+
+  els.restaurantList.append(fragment);
+}
+
+function renderMeta(restaurants) {
+  const counts = { 0: 0, 1: 0, 2: 0, 3: 0 };
+  restaurants.forEach((restaurant) => {
+    counts[restaurant.rating] += 1;
+  });
+  els.resultCount.textContent = `${restaurants.length}곳`;
+  els.ratingSummary.textContent = `소개 ${counts[0]} · 1스타 ${counts[1]} · 2스타 ${counts[2]} · 3스타 ${counts[3]}`;
+}
+
+function renderSelectedCard(visibleRestaurants) {
+  const visibleIds = new Set(visibleRestaurants.map((restaurant) => restaurant.id));
+  const restaurant = state.restaurants.find((item) => item.id === state.selectedId);
+  if (!restaurant || !visibleIds.has(restaurant.id)) {
+    els.selectedCard.classList.add("hidden");
+    els.selectedCard.innerHTML = "";
+    return;
+  }
+
+  const naverLink = `https://map.naver.com/p/search/${encodeURIComponent(restaurant.name)}`;
+  els.selectedCard.innerHTML = `
+    <div class="card-head">
+      <div>
+        <h2>${escapeHtml(restaurant.name)}</h2>
+        <p class="card-sub">${escapeHtml([restaurant.category, restaurant.area].filter(Boolean).join(" · "))}</p>
+      </div>
+      ${ratingBadge(restaurant.rating)}
+    </div>
+    ${menuChips(restaurant.menus)}
+    ${deliveryChips(restaurant.deliveryApps)}
+    ${restaurant.memo ? `<p class="memo">${escapeHtml(restaurant.memo)}</p>` : ""}
+    <div class="card-actions">
+      <a class="link-button" href="${naverLink}" target="_blank" rel="noreferrer">네이버</a>
+      <button class="secondary-button" type="button" data-action="edit">수정</button>
+      <button class="secondary-button danger-button" type="button" data-action="delete">삭제</button>
+    </div>
+  `;
+
+  els.selectedCard.querySelector('[data-action="edit"]').addEventListener("click", () => {
+    openSpotDialog(restaurant);
+  });
+  els.selectedCard.querySelector('[data-action="delete"]').addEventListener("click", () => {
+    deleteRestaurant(restaurant.id);
+  });
+  els.selectedCard.classList.remove("hidden");
+}
+
+function selectRestaurant(id) {
+  state.selectedId = id;
+  const restaurant = state.restaurants.find((item) => item.id === id);
+  if (restaurant) {
+    state.map?.panTo({ lat: restaurant.lat, lng: restaurant.lng });
+  }
+  render();
+}
+
+function openSpotDialog(restaurant = null) {
+  els.spotForm.reset();
+  document.getElementById("spotId").value = restaurant?.id ?? "";
+  els.spotDialogTitle.textContent = restaurant ? "맛집 수정" : "맛집 추가";
+
+  if (restaurant) {
+    document.getElementById("nameInput").value = restaurant.name;
+    document.getElementById("categoryInput").value = restaurant.category;
+    document.getElementById("areaInput").value = restaurant.area;
+    document.getElementById("menusInput").value = restaurant.menus.join(", ");
+    fillCoordinateInputs({ lat: restaurant.lat, lng: restaurant.lng });
+    document.getElementById("memoInput").value = restaurant.memo;
+    const ratingInput = els.spotForm.querySelector(`[name="rating"][value="${restaurant.rating}"]`);
+    if (ratingInput) ratingInput.checked = true;
+    els.spotForm.querySelectorAll('[name="deliveryApps"]').forEach((input) => {
+      input.checked = restaurant.deliveryApps.includes(input.value);
+    });
+  } else {
+    fillCoordinateInputs(state.map?.getCenter() ?? state.lastMapCoord, "지도 중심");
+  }
+
+  document.body.classList.add("is-picking-location");
+  if (!els.spotDialog.open) {
+    els.spotDialog.show();
+  }
+  document.getElementById("nameInput").focus();
+}
+
+function handleSpotSubmit(event) {
+  event.preventDefault();
+  const formData = new FormData(els.spotForm);
+  const id = String(formData.get("id") || "").trim();
+  const lat = Number(formData.get("lat"));
+  const lng = Number(formData.get("lng"));
+
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+    fillCoordinateInputs(state.map?.getCenter() ?? DEFAULT_CENTER, "지도 중심");
+    return;
+  }
+
+  const nextRestaurant = {
+    id: id || createId(),
+    name: String(formData.get("name") || "").trim(),
+    category: String(formData.get("category") || "기타").trim(),
+    rating: clampRating(Number(formData.get("rating"))),
+    area: String(formData.get("area") || "").trim(),
+    lat,
+    lng,
+    menus: String(formData.get("menus") || "")
+      .split(",")
+      .map((menu) => menu.trim())
+      .filter(Boolean)
+      .slice(0, 6),
+    deliveryApps: normalizeDeliveryApps(formData.getAll("deliveryApps")),
+    memo: String(formData.get("memo") || "").trim(),
+  };
+
+  if (!nextRestaurant.name) {
+    document.getElementById("nameInput").focus();
+    return;
+  }
+
+  const existingIndex = state.restaurants.findIndex((restaurant) => restaurant.id === nextRestaurant.id);
+  if (existingIndex >= 0) {
+    state.restaurants.splice(existingIndex, 1, nextRestaurant);
+  } else {
+    state.restaurants.unshift(nextRestaurant);
+  }
+
+  saveRestaurants();
+  state.selectedId = nextRestaurant.id;
+  els.spotDialog.close();
+  render();
+  state.map?.panTo({ lat: nextRestaurant.lat, lng: nextRestaurant.lng });
+}
+
+function deleteRestaurant(id) {
+  const restaurant = state.restaurants.find((item) => item.id === id);
+  if (!restaurant) return;
+  if (!window.confirm(`${restaurant.name}을 삭제할까요?`)) return;
+
+  state.restaurants = state.restaurants.filter((item) => item.id !== id);
+  if (state.selectedId === id) {
+    state.selectedId = null;
+  }
+  saveRestaurants();
+  render();
+}
+
+function fillCoordinateInputs(coord, label = "선택 위치") {
+  const lat = Number(coord.lat);
+  const lng = Number(coord.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+  document.getElementById("latInput").value = lat.toFixed(6);
+  document.getElementById("lngInput").value = lng.toFixed(6);
+  if (els.locationStatus) {
+    els.locationStatus.textContent = label;
+  }
+  if (els.locationSummary) {
+    els.locationSummary.textContent = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+  }
+}
+
+function ratingBadge(rating) {
+  const meta = RATING_META[rating];
+  const symbol = rating === 0 ? meta.icon : meta.stars;
+  return `
+    <span class="rating-badge" data-rating="${rating}" aria-label="${meta.label}">
+      <span aria-hidden="true">${symbol}</span>
+      <span>${meta.label}</span>
+    </span>
+  `;
+}
+
+function menuChips(menus) {
+  if (!menus.length) return "";
+  return `<div class="menu-row">${menus.map((menu) => `<span class="menu-chip">${escapeHtml(menu)}</span>`).join("")}</div>`;
+}
+
+function deliveryChips(deliveryApps) {
+  const labels = deliveryLabels(deliveryApps);
+  if (!labels.length) return "";
+  return `<div class="delivery-row">${labels.map((label) => `<span class="delivery-chip">${escapeHtml(label)}</span>`).join("")}</div>`;
+}
+
+function deliverySummary(deliveryApps) {
+  const labels = deliveryShortLabels(deliveryApps);
+  return labels.length ? `배달 ${labels.join(" · ")}` : "";
+}
+
+function deliveryLabels(deliveryApps) {
+  return normalizeDeliveryApps(deliveryApps).map((id) => DELIVERY_APPS.find((app) => app.id === id)?.label).filter(Boolean);
+}
+
+function deliveryShortLabels(deliveryApps) {
+  return normalizeDeliveryApps(deliveryApps).map((id) => DELIVERY_APPS.find((app) => app.id === id)?.shortLabel).filter(Boolean);
+}
+
+function pinSymbol(rating) {
+  const meta = RATING_META[rating] ?? RATING_META[0];
+  return rating === 0 ? meta.icon : meta.stars;
+}
+
+function createPinElement(restaurant, selectedId, onSelect) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = `pin-marker${restaurant.id === selectedId ? " is-selected" : ""}`;
+  button.dataset.rating = String(restaurant.rating);
+  button.setAttribute("aria-label", `${restaurant.name} ${RATING_META[restaurant.rating].label}`);
+  button.innerHTML = `
+    <span class="pin-head">
+      <span class="pin-level">${pinSymbol(restaurant.rating)}</span>
+    </span>
+  `;
+  button.addEventListener("click", (event) => {
+    event.stopPropagation();
+    onSelect(restaurant.id);
+  });
+  return button;
+}
+
+function pinHtml(restaurant, selectedId) {
+  const selectedClass = restaurant.id === selectedId ? " is-selected" : "";
+  return `
+    <button class="pin-marker${selectedClass}" data-rating="${restaurant.rating}" aria-label="${escapeHtml(restaurant.name)} ${RATING_META[restaurant.rating].label}">
+      <span class="pin-head">
+        <span class="pin-level">${pinSymbol(restaurant.rating)}</span>
+      </span>
+    </button>
+  `;
+}
+
+function setProviderBadge(label, stateName) {
+  els.providerBadge.textContent = label;
+  els.providerBadge.dataset.state = stateName;
+}
+
+function loadRestaurants() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return structuredClone(seedRestaurants);
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return structuredClone(seedRestaurants);
+    return parsed.map(normalizeRestaurant).filter(Boolean);
+  } catch {
+    return structuredClone(seedRestaurants);
+  }
+}
+
+function saveRestaurants() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state.restaurants));
+}
+
+function normalizeRestaurant(item) {
+  if (!item || typeof item !== "object") return null;
+  const lat = Number(item.lat);
+  const lng = Number(item.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  return {
+    id: String(item.id || createId()),
+    name: String(item.name || "이름 없음"),
+    category: String(item.category || "기타"),
+    rating: clampRating(Number(item.rating)),
+    area: String(item.area || ""),
+    lat,
+    lng,
+    menus: Array.isArray(item.menus) ? item.menus.map(String).filter(Boolean).slice(0, 6) : [],
+    deliveryApps: normalizeDeliveryApps(item.deliveryApps),
+    memo: String(item.memo || ""),
+  };
+}
+
+function normalizeDeliveryApps(value) {
+  if (!Array.isArray(value)) return [];
+  const validIds = new Set(DELIVERY_APPS.map((app) => app.id));
+  return [...new Set(value.map(String).filter((id) => validIds.has(id)))];
+}
+
+function createId() {
+  if (window.crypto?.randomUUID) {
+    return window.crypto.randomUUID();
+  }
+  return `spot-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function clampRating(value) {
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(0, Math.min(3, Math.round(value)));
+}
+
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"']/g, (char) => {
+    const entities = {
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#039;",
+    };
+    return entities[char];
+  });
+}
+
+function loadScript(src, checkReady, timeoutMs = 7000, callbackName = "") {
+  return new Promise((resolve, reject) => {
+    if (checkReady()) {
+      resolve();
+      return;
+    }
+
+    let settled = false;
+    const script = document.createElement("script");
+    const timeoutId = window.setTimeout(() => {
+      settle(new Error("지도 API 로딩 시간이 초과되었습니다"));
+    }, timeoutMs);
+
+    function settle(error) {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timeoutId);
+      script.onerror = null;
+      script.onload = null;
+      if (callbackName) {
+        try {
+          delete window[callbackName];
+        } catch {
+          window[callbackName] = undefined;
+        }
+      }
+      if (error) reject(error);
+      else resolve();
+    }
+
+    if (callbackName) {
+      window[callbackName] = () => {
+        waitForReady(checkReady, 2500).then(() => settle(), settle);
+      };
+    }
+
+    script.src = src;
+    script.async = true;
+    script.onerror = () => settle(new Error("지도 API 스크립트를 불러오지 못했습니다"));
+    script.onload = () => {
+      if (!callbackName) {
+        waitForReady(checkReady, 2500).then(() => settle(), settle);
+      }
+    };
+    document.head.append(script);
+  });
+}
+
+function waitForReady(checkReady, timeoutMs) {
+  return new Promise((resolve, reject) => {
+    const deadline = Date.now() + timeoutMs;
+
+    function tick() {
+      if (checkReady()) {
+        resolve();
+        return;
+      }
+      if (Date.now() >= deadline) {
+        reject(new Error("지도 API가 준비되지 않았습니다"));
+        return;
+      }
+      window.setTimeout(tick, 50);
+    }
+
+    tick();
+  });
+}
+
+class MockMapAdapter {
+  constructor(mapHost, mockMap, pinsLayer) {
+    this.type = "mock";
+    this.label = "샘플 지도";
+    this.mapHost = mapHost;
+    this.mockMap = mockMap;
+    this.pinsLayer = pinsLayer;
+    this.center = DEFAULT_CENTER;
+    this.clickHandler = null;
+    this.onMapClick = this.onMapClick.bind(this);
+  }
+
+  async load() {
+    this.mapHost.classList.add("hidden");
+    this.mockMap.classList.remove("hidden");
+    this.mockMap.setAttribute("aria-hidden", "false");
+    this.mockMap.addEventListener("click", this.onMapClick);
+  }
+
+  render(restaurants, selectedId, onSelect) {
+    this.pinsLayer.innerHTML = "";
+    const fragment = document.createDocumentFragment();
+    restaurants.forEach((restaurant) => {
+      const pin = createPinElement(restaurant, selectedId, onSelect);
+      const position = this.coordToPoint({ lat: restaurant.lat, lng: restaurant.lng });
+      pin.style.left = `${position.x}%`;
+      pin.style.top = `${position.y}%`;
+      fragment.append(pin);
+    });
+    this.pinsLayer.append(fragment);
+  }
+
+  setClickHandler(handler) {
+    this.clickHandler = handler;
+  }
+
+  getCenter() {
+    return this.center;
+  }
+
+  panTo(coord) {
+    this.center = coord;
+  }
+
+  destroy() {
+    this.mockMap.removeEventListener("click", this.onMapClick);
+    this.pinsLayer.innerHTML = "";
+  }
+
+  onMapClick(event) {
+    if (event.target.closest(".pin-marker")) return;
+    const rect = this.mockMap.getBoundingClientRect();
+    const x = ((event.clientX - rect.left) / rect.width) * 100;
+    const y = ((event.clientY - rect.top) / rect.height) * 100;
+    const coord = this.pointToCoord({ x, y });
+    this.center = coord;
+    this.clickHandler?.(coord);
+  }
+
+  coordToPoint(coord) {
+    const x = ((coord.lng - MOCK_BOUNDS.lngMin) / (MOCK_BOUNDS.lngMax - MOCK_BOUNDS.lngMin)) * 100;
+    const y = 100 - ((coord.lat - MOCK_BOUNDS.latMin) / (MOCK_BOUNDS.latMax - MOCK_BOUNDS.latMin)) * 100;
+    return {
+      x: Math.max(4, Math.min(96, x)),
+      y: Math.max(8, Math.min(94, y)),
+    };
+  }
+
+  pointToCoord(point) {
+    const lng = MOCK_BOUNDS.lngMin + (point.x / 100) * (MOCK_BOUNDS.lngMax - MOCK_BOUNDS.lngMin);
+    const lat = MOCK_BOUNDS.latMax - (point.y / 100) * (MOCK_BOUNDS.latMax - MOCK_BOUNDS.latMin);
+    return { lat, lng };
+  }
+}
+
+class NaverMapAdapter {
+  constructor(mapHost, mockMap, key) {
+    this.type = "naver";
+    this.label = "네이버 지도";
+    this.mapHost = mapHost;
+    this.mockMap = mockMap;
+    this.key = key;
+    this.map = null;
+    this.markers = [];
+    this.clickHandler = null;
+    this.clickListener = null;
+  }
+
+  async load() {
+    await this.loadNaverScript();
+
+    this.mapHost.classList.remove("hidden");
+    this.mockMap.classList.add("hidden");
+    this.mockMap.setAttribute("aria-hidden", "true");
+    this.map = new window.naver.maps.Map(this.mapHost, {
+      center: new window.naver.maps.LatLng(DEFAULT_CENTER.lat, DEFAULT_CENTER.lng),
+      zoom: 13,
+      scaleControl: false,
+      mapDataControl: false,
+      zoomControl: true,
+      zoomControlOptions: {
+        position: window.naver.maps.Position.TOP_RIGHT,
+      },
+    });
+
+    this.clickListener = window.naver.maps.Event.addListener(this.map, "click", (event) => {
+      this.clickHandler?.(normaliseNaverCoord(event.coord));
+    });
+  }
+
+  async loadNaverScript() {
+    const previousAuthFailure = window.navermap_authFailure;
+    const callbackName = `ccatalogNaverReady${Date.now()}`;
+    const src = `https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=${encodeURIComponent(this.key)}&callback=${callbackName}`;
+    try {
+      await Promise.race([
+        loadScript(src, () => Boolean(window.naver?.maps?.Map && window.naver.maps.LatLng), 8000, callbackName),
+        new Promise((_, reject) => {
+          window.navermap_authFailure = () => {
+            reject(new Error("네이버 지도 API 인증에 실패했습니다"));
+          };
+        }),
+      ]);
+    } finally {
+      window.navermap_authFailure = previousAuthFailure;
+    }
+  }
+
+  render(restaurants, selectedId, onSelect) {
+    this.markers.forEach((marker) => marker.setMap(null));
+    this.markers = restaurants.map((restaurant) => {
+      const marker = new window.naver.maps.Marker({
+        position: new window.naver.maps.LatLng(restaurant.lat, restaurant.lng),
+        map: this.map,
+        title: restaurant.name,
+        icon: {
+          content: pinHtml(restaurant, selectedId),
+          anchor: new window.naver.maps.Point(24, 58),
+        },
+      });
+      window.naver.maps.Event.addListener(marker, "click", () => onSelect(restaurant.id));
+      return marker;
+    });
+  }
+
+  setClickHandler(handler) {
+    this.clickHandler = handler;
+  }
+
+  getCenter() {
+    return normaliseNaverCoord(this.map.getCenter());
+  }
+
+  panTo(coord) {
+    this.map.panTo(new window.naver.maps.LatLng(coord.lat, coord.lng));
+  }
+
+  destroy() {
+    this.markers.forEach((marker) => marker.setMap(null));
+    this.markers = [];
+    if (this.clickListener) {
+      window.naver?.maps?.Event?.removeListener(this.clickListener);
+    }
+    this.map = null;
+  }
+}
+
+function normaliseNaverCoord(coord) {
+  if (!coord) return DEFAULT_CENTER;
+  const lat = typeof coord.lat === "function" ? coord.lat() : coord.y ?? coord._lat;
+  const lng = typeof coord.lng === "function" ? coord.lng() : coord.x ?? coord._lng;
+  return { lat: Number(lat), lng: Number(lng) };
+}
