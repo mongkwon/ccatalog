@@ -249,29 +249,73 @@ button {
   align-items: center;
   gap: 12px;
   min-width: 0;
-  padding: 8px 14px 8px 8px;
+  padding: 8px 8px 8px 14px;
   border-radius: 999px;
   pointer-events: auto;
 }
 
+.brand-copy {
+  min-width: 0;
+}
+
+.brand-actions {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+}
+
+.brand-admin-button,
 .brand-add-button {
   display: grid;
-  width: 42px;
   height: 42px;
   place-items: center;
   border: 1px solid rgba(17, 24, 32, 0.08);
-  border-radius: 50%;
   padding: 0;
   color: #062936;
   background: rgba(203, 238, 244, 0.62);
   box-shadow: 0 1px 0 rgba(17, 24, 32, 0.04);
   pointer-events: auto;
+  transition:
+    width 220ms ease,
+    margin 220ms ease,
+    opacity 180ms ease,
+    transform 220ms ease,
+    background 160ms ease,
+    border-color 160ms ease;
 }
 
+.brand-admin-button {
+  width: 66px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.brand-add-button {
+  width: 0;
+  border-width: 0;
+  border-radius: 50%;
+  opacity: 0;
+  pointer-events: none;
+  transform: scale(0.82);
+}
+
+.brand-admin-button:hover,
+.brand-admin-button.is-active,
 .brand-add-button:hover,
 .brand-add-button.is-active {
   border-color: rgba(17, 24, 32, 0.16);
   background: rgba(17, 24, 32, 0.04);
+}
+
+body.is-admin-mode .brand-add-button {
+  width: 42px;
+  border-width: 1px;
+  opacity: 1;
+  pointer-events: auto;
+  transform: scale(1);
 }
 
 .brand-add-button span {
@@ -1469,7 +1513,8 @@ button {
 
   .brand {
     max-width: calc(100vw - 24px);
-    padding-right: 12px;
+    padding: 7px 7px 7px 12px;
+    gap: 10px;
   }
 
   .brand h1 {
@@ -1480,9 +1525,23 @@ button {
     font-size: 10px;
   }
 
+  .brand-admin-button,
   .brand-add-button {
     width: 38px;
     height: 38px;
+  }
+
+  .brand-admin-button {
+    width: 60px;
+    font-size: 11px;
+  }
+
+  .brand-add-button {
+    width: 0;
+  }
+
+  body.is-admin-mode .brand-add-button {
+    width: 38px;
   }
 
   .brand-add-button span {

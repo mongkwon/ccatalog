@@ -107,6 +107,7 @@ const state = {
   selectedId: null,
   query: "",
   filter: "all",
+  isAdminMode: false,
   map: null,
   lastMapCoord: DEFAULT_CENTER,
   placeSelection: null,
@@ -169,6 +170,7 @@ function cacheElements() {
   els.bottomDock = document.querySelector(".bottom-dock");
   els.dockIndicator = document.querySelector(".dock-indicator");
   els.filterModeButton = document.getElementById("filterModeButton");
+  els.adminButton = document.getElementById("adminButton");
   els.addButton = document.getElementById("addButton");
   els.searchToggle = document.getElementById("searchToggle");
   els.spotDialog = document.getElementById("spotDialog");
@@ -203,7 +205,13 @@ function bindEvents() {
     });
   });
 
+  els.adminButton.addEventListener("click", () => {
+    setAdminMode(!state.isAdminMode);
+  });
+
   els.addButton.addEventListener("click", () => {
+    if (!state.isAdminMode) return;
+
     if (isSpotDialogOpen()) {
       closeSpotDialog();
       return;
@@ -306,6 +314,26 @@ function setSearchPanelOpen(isOpen) {
     scheduleDockIndicatorUpdate(540);
   } else {
     updateDockIndicator();
+  }
+}
+
+function setAdminMode(isEnabled, { rerender = true } = {}) {
+  const nextValue = Boolean(isEnabled);
+
+  if (!nextValue && isSpotDialogOpen()) {
+    closeSpotDialog({ restorePanel: !state.selectedId });
+  }
+
+  state.isAdminMode = nextValue;
+  document.body.classList.toggle("is-admin-mode", nextValue);
+  els.adminButton.classList.toggle("is-active", nextValue);
+  els.adminButton.setAttribute("aria-pressed", String(nextValue));
+  els.adminButton.setAttribute("aria-label", nextValue ? "관리자 모드 끄기" : "관리자 모드 켜기");
+  els.addButton.setAttribute("aria-hidden", String(!nextValue));
+  els.addButton.tabIndex = nextValue ? 0 : -1;
+
+  if (rerender) {
+    render();
   }
 }
 
@@ -1030,7 +1058,7 @@ function renderSelectedCard(visibleRestaurants) {
   }
 
   const naverLink = `https://map.naver.com/p/search/${encodeURIComponent(restaurant.name)}`;
-  const editableActions = restaurant.canEdit
+  const editableActions = state.isAdminMode
     ? `
           <button class="secondary-button" type="button" data-action="edit">수정</button>
           <button class="secondary-button danger-button" type="button" data-action="delete">삭제</button>
@@ -1078,6 +1106,8 @@ function selectRestaurant(id, { closePanel = false } = {}) {
 }
 
 function openSpotDialog(restaurant = null) {
+  if (!state.isAdminMode) return;
+
   closeFloatingPanels();
   closeSelectedRestaurant();
   els.spotForm.reset();
@@ -1112,6 +1142,8 @@ function openSpotDialog(restaurant = null) {
 
 async function handleSpotSubmit(event) {
   event.preventDefault();
+  if (!state.isAdminMode) return;
+
   addMenuFromDraft({ refocus: false });
   const formData = new FormData(els.spotForm);
   const id = String(formData.get("id") || "").trim();
@@ -1172,6 +1204,8 @@ async function handleSpotSubmit(event) {
 }
 
 async function deleteRestaurant(id) {
+  if (!state.isAdminMode) return;
+
   const restaurant = state.restaurants.find((item) => item.id === id);
   if (!restaurant) return;
   if (!window.confirm(`${restaurant.name}을 삭제할까요?`)) return;

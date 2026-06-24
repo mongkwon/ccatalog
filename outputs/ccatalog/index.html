@@ -4,12 +4,12 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>까탈로그</title>
-    <link rel="icon" type="image/svg+xml" href="./icon.svg?v=20260624-scroll-icon" />
-    <link rel="apple-touch-icon" href="./icon.svg?v=20260624-scroll-icon" />
+    <link rel="icon" type="image/svg+xml" href="./icon.svg?v=20260624-admin-mode" />
+    <link rel="apple-touch-icon" href="./icon.svg?v=20260624-admin-mode" />
     <meta name="theme-color" content="#eef4f8" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" />
-    <link rel="stylesheet" href="./styles.css?v=20260624-scroll-icon" />
-    <script defer src="./app.js?v=20260624-scroll-icon"></script>
+    <link rel="stylesheet" href="./styles.css?v=20260624-admin-mode" />
+    <script defer src="./app.js?v=20260624-admin-mode"></script>
   </head>
   <body>
     <main class="app-shell">
@@ -32,20 +32,34 @@
 
         <header class="topbar">
           <div class="brand">
-            <button
-              id="addButton"
-              class="brand-add-button"
-              type="button"
-              title="맛집 추가"
-              aria-label="맛집 추가"
-              aria-controls="spotDialog"
-              aria-expanded="false"
-            >
-              <span aria-hidden="true">+</span>
-            </button>
-            <div>
+            <div class="brand-copy">
               <h1>까탈로그</h1>
               <p>취향에 엄격한 맛집 지도</p>
+            </div>
+            <div class="brand-actions">
+              <button
+                id="adminButton"
+                class="brand-admin-button"
+                type="button"
+                title="관리자 모드"
+                aria-label="관리자 모드 켜기"
+                aria-pressed="false"
+              >
+                관리자
+              </button>
+              <button
+                id="addButton"
+                class="brand-add-button"
+                type="button"
+                title="맛집 추가"
+                aria-label="맛집 추가"
+                aria-controls="spotDialog"
+                aria-expanded="false"
+                aria-hidden="true"
+                tabindex="-1"
+              >
+                <span aria-hidden="true">+</span>
+              </button>
             </div>
           </div>
         </header>

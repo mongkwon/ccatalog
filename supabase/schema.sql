@@ -35,6 +35,8 @@ begin
 end;
 $$;
 
+revoke execute on function public.set_restaurants_updated_at() from public, anon, authenticated;
+
 drop trigger if exists set_restaurants_updated_at on public.restaurants;
 create trigger set_restaurants_updated_at
 before update on public.restaurants
@@ -58,19 +60,21 @@ to authenticated
 with check ((select auth.uid()) = owner_id);
 
 drop policy if exists "Owners can update own restaurants" on public.restaurants;
-create policy "Owners can update own restaurants"
+drop policy if exists "Authenticated users can update restaurants" on public.restaurants;
+create policy "Authenticated users can update restaurants"
 on public.restaurants
 for update
 to authenticated
-using ((select auth.uid()) = owner_id)
-with check ((select auth.uid()) = owner_id);
+using ((select auth.uid()) is not null)
+with check ((select auth.uid()) is not null);
 
 drop policy if exists "Owners can delete own restaurants" on public.restaurants;
-create policy "Owners can delete own restaurants"
+drop policy if exists "Authenticated users can delete restaurants" on public.restaurants;
+create policy "Authenticated users can delete restaurants"
 on public.restaurants
 for delete
 to authenticated
-using ((select auth.uid()) = owner_id);
+using ((select auth.uid()) is not null);
 
 grant usage on schema public to anon, authenticated;
 grant select on public.restaurants to anon, authenticated;
