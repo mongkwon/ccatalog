@@ -200,7 +200,9 @@ button {
 }
 
 .brand,
+.bottom-dock,
 .restaurant-panel,
+.search-panel,
 .selected-card,
 .modal-card {
   position: relative;
@@ -218,7 +220,9 @@ button {
 }
 
 .brand::before,
+.bottom-dock::before,
 .restaurant-panel::before,
+.search-panel::before,
 .selected-card::before,
 .modal-card::before {
   position: absolute;
@@ -319,22 +323,60 @@ button {
   position: absolute;
   z-index: 18;
   left: 50%;
-  bottom: 20px;
+  bottom: 96px;
   display: grid;
-  width: min(930px, calc(100vw - 40px));
-  max-height: 230px;
-  transform: translateX(-50%);
+  width: min(860px, calc(100vw - 32px));
+  max-height: 220px;
+  transform: translate(-50%, 10px);
   grid-template-areas:
-    "search filters action"
-    "meta list action";
-  grid-template-columns: minmax(230px, 0.85fr) minmax(320px, 1.35fr) 62px;
+    "filters filters"
+    "meta list";
+  grid-template-columns: 170px minmax(0, 1fr);
   gap: 10px 12px;
   padding: 12px;
   border-radius: 34px;
+  opacity: 0;
+  pointer-events: none;
+  visibility: hidden;
+  transition:
+    opacity 160ms ease,
+    transform 160ms ease,
+    visibility 160ms ease;
+}
+
+.restaurant-panel.is-open {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translate(-50%, 0);
+  visibility: visible;
+}
+
+.search-panel {
+  position: absolute;
+  z-index: 19;
+  left: 50%;
+  bottom: 96px;
+  width: min(520px, calc(100vw - 32px));
+  padding: 10px;
+  border-radius: 30px;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, 10px);
+  visibility: hidden;
+  transition:
+    opacity 160ms ease,
+    transform 160ms ease,
+    visibility 160ms ease;
+}
+
+.search-panel.is-open {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translate(-50%, 0);
+  visibility: visible;
 }
 
 .search-row {
-  grid-area: search;
   display: grid;
   grid-template-columns: 20px 1fr;
   align-items: center;
@@ -618,12 +660,20 @@ button {
   position: absolute;
   z-index: 17;
   left: 50%;
-  bottom: 264px;
+  bottom: 108px;
   width: min(500px, calc(100vw - 32px));
   min-width: 0;
   transform: translateX(-50%);
   padding: 16px;
   border-radius: 28px;
+}
+
+.is-list-open .selected-card {
+  bottom: 332px;
+}
+
+.is-search-open .selected-card {
+  bottom: 176px;
 }
 
 .selected-card p {
@@ -695,33 +745,68 @@ button {
   color: var(--danger);
 }
 
-.panel-add-button {
-  grid-area: action;
-  align-self: stretch;
+.bottom-dock {
+  position: absolute;
+  z-index: 30;
+  left: 50%;
+  bottom: 18px;
   display: grid;
-  width: 62px;
-  min-height: 98px;
+  grid-template-columns: repeat(3, 54px);
+  gap: 8px;
+  padding: 8px;
+  border-radius: 999px;
+  transform: translateX(-50%);
+}
+
+.dock-button {
+  position: relative;
+  display: grid;
+  width: 54px;
+  height: 54px;
   place-items: center;
   border: 1px solid rgba(255, 255, 255, 0.84);
-  border-radius: 999px;
+  border-radius: 50%;
+  color: #063342;
+  background: rgba(255, 255, 255, 0.28);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.64);
+  backdrop-filter: blur(16px) saturate(1.45);
+  -webkit-backdrop-filter: blur(16px) saturate(1.45);
+}
+
+.dock-button:hover,
+.dock-button.is-active {
+  background:
+    var(--glass-sheen),
+    linear-gradient(145deg, rgba(225, 253, 255, 0.9), rgba(71, 207, 229, 0.64));
+}
+
+.dock-button svg {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+}
+
+.dock-button-primary {
   color: #063342;
   background:
     var(--glass-sheen),
     linear-gradient(145deg, rgba(225, 253, 255, 0.9), rgba(71, 207, 229, 0.64));
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.54),
-    0 0 0 8px rgba(124, 226, 242, 0.16);
-  backdrop-filter: blur(18px) saturate(1.55);
-  -webkit-backdrop-filter: blur(18px) saturate(1.55);
+    0 0 0 6px rgba(124, 226, 242, 0.14);
 }
 
-.panel-add-button:hover {
+.dock-button-primary:hover {
   background:
     var(--glass-sheen),
     linear-gradient(145deg, rgba(235, 254, 255, 0.96), rgba(82, 215, 236, 0.72));
 }
 
-.panel-add-button span {
+.dock-button-primary span {
   transform: translateY(-2px);
   font-size: 34px;
   font-weight: 500;
@@ -1039,17 +1124,17 @@ button {
 
 @media (max-width: 940px) {
   .restaurant-panel {
-    width: min(790px, calc(100vw - 32px));
+    width: min(760px, calc(100vw - 32px));
     grid-template-areas:
-      "search search action"
-      "filters filters action"
-      "meta list action";
-    grid-template-columns: 170px minmax(0, 1fr) 58px;
-    max-height: 256px;
+      "filters"
+      "meta"
+      "list";
+    grid-template-columns: minmax(0, 1fr);
+    max-height: 246px;
   }
 
-  .selected-card {
-    bottom: 286px;
+  .is-list-open .selected-card {
+    bottom: 350px;
   }
 }
 
@@ -1086,20 +1171,46 @@ button {
 
   .restaurant-panel {
     right: 12px;
-    bottom: 12px;
+    bottom: 92px;
     left: 12px;
     width: auto;
-    max-height: 290px;
-    transform: none;
+    max-height: 250px;
+    transform: translateY(10px);
     grid-template-areas:
-      "search action"
-      "filters filters"
-      "meta meta"
-      "list list";
-    grid-template-columns: minmax(0, 1fr) 48px;
+      "filters"
+      "meta"
+      "list";
+    grid-template-columns: minmax(0, 1fr);
     gap: 8px;
     padding: 10px;
     border-radius: 28px;
+  }
+
+  .restaurant-panel.is-open {
+    transform: translateY(0);
+  }
+
+  .search-panel {
+    right: 12px;
+    bottom: 92px;
+    left: 12px;
+    width: auto;
+    transform: translateY(10px);
+  }
+
+  .search-panel.is-open {
+    transform: translateY(0);
+  }
+
+  .bottom-dock {
+    bottom: 12px;
+    grid-template-columns: repeat(3, 52px);
+    padding: 7px;
+  }
+
+  .dock-button {
+    width: 52px;
+    height: 52px;
   }
 
   .search-row {
@@ -1156,7 +1267,7 @@ button {
 
   .selected-card {
     right: 12px;
-    bottom: 318px;
+    bottom: 88px;
     left: 12px;
     width: auto;
     transform: none;
@@ -1169,13 +1280,12 @@ button {
     font-size: 20px;
   }
 
-  .panel-add-button {
-    width: 48px;
-    min-height: 40px;
+  .is-search-open .selected-card {
+    bottom: 156px;
   }
 
-  .panel-add-button span {
-    font-size: 28px;
+  .is-list-open .selected-card {
+    bottom: 356px;
   }
 
   .form-grid {
@@ -1206,11 +1316,19 @@ button {
 }
 
 @media (max-height: 720px) {
-  .restaurant-panel {
+  .bottom-dock {
     bottom: 12px;
+  }
+
+  .restaurant-panel {
+    bottom: 96px;
     max-height: 142px;
     gap: 8px 10px;
     padding: 10px;
+  }
+
+  .search-panel {
+    bottom: 96px;
   }
 
   .search-row,
@@ -1245,10 +1363,18 @@ button {
   }
 
   .selected-card {
-    bottom: 158px;
+    bottom: 92px;
     width: min(660px, calc(100vw - 24px));
     padding: 12px;
     border-radius: 24px;
+  }
+
+  .is-search-open .selected-card {
+    bottom: 154px;
+  }
+
+  .is-list-open .selected-card {
+    bottom: 252px;
   }
 
   .selected-card h2 {
@@ -1281,7 +1407,7 @@ button {
 @media (max-width: 680px) and (max-height: 760px) {
   .selected-card {
     right: 12px;
-    bottom: 168px;
+    bottom: 88px;
     left: 12px;
     width: auto;
     transform: none;
@@ -1296,6 +1422,14 @@ button {
 
   .selected-card .rating-badge {
     min-height: 24px;
+  }
+
+  .is-search-open .selected-card {
+    bottom: 154px;
+  }
+
+  .is-list-open .selected-card {
+    bottom: 254px;
   }
 }
 

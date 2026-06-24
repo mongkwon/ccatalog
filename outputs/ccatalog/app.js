@@ -125,12 +125,16 @@ function cacheElements() {
   els.map = document.getElementById("map");
   els.mockMap = document.getElementById("mockMap");
   els.mockPins = document.getElementById("mockPins");
+  els.restaurantPanel = document.getElementById("restaurantPanel");
+  els.searchPanel = document.getElementById("searchPanel");
   els.searchInput = document.getElementById("searchInput");
   els.restaurantList = document.getElementById("restaurantList");
   els.resultCount = document.getElementById("resultCount");
   els.ratingSummary = document.getElementById("ratingSummary");
   els.selectedCard = document.getElementById("selectedCard");
   els.addButton = document.getElementById("addButton");
+  els.panelToggle = document.getElementById("panelToggle");
+  els.searchToggle = document.getElementById("searchToggle");
   els.spotDialog = document.getElementById("spotDialog");
   els.spotForm = document.getElementById("spotForm");
   els.spotDialogTitle = document.getElementById("spotDialogTitle");
@@ -154,7 +158,30 @@ function bindEvents() {
     });
   });
 
-  els.addButton.addEventListener("click", () => openSpotDialog());
+  els.panelToggle.addEventListener("click", () => {
+    setSearchPanelOpen(false);
+    setRestaurantPanelOpen(!els.restaurantPanel.classList.contains("is-open"));
+  });
+
+  els.searchToggle.addEventListener("click", () => {
+    setRestaurantPanelOpen(false);
+    const nextOpen = !els.searchPanel.classList.contains("is-open");
+    setSearchPanelOpen(nextOpen);
+    if (nextOpen) {
+      els.searchInput.focus();
+    }
+  });
+
+  els.addButton.addEventListener("click", () => {
+    closeFloatingPanels();
+    openSpotDialog();
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !els.spotDialog.open) {
+      closeFloatingPanels();
+    }
+  });
 
   document.querySelectorAll("[data-close-dialog]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -179,6 +206,27 @@ function bindEvents() {
   });
 
   els.spotForm.addEventListener("submit", handleSpotSubmit);
+}
+
+function setRestaurantPanelOpen(isOpen) {
+  els.restaurantPanel.classList.toggle("is-open", isOpen);
+  els.restaurantPanel.setAttribute("aria-hidden", String(!isOpen));
+  els.panelToggle.classList.toggle("is-active", isOpen);
+  els.panelToggle.setAttribute("aria-expanded", String(isOpen));
+  document.body.classList.toggle("is-list-open", isOpen);
+}
+
+function setSearchPanelOpen(isOpen) {
+  els.searchPanel.classList.toggle("is-open", isOpen);
+  els.searchPanel.setAttribute("aria-hidden", String(!isOpen));
+  els.searchToggle.classList.toggle("is-active", isOpen);
+  els.searchToggle.setAttribute("aria-expanded", String(isOpen));
+  document.body.classList.toggle("is-search-open", isOpen);
+}
+
+function closeFloatingPanels() {
+  setRestaurantPanelOpen(false);
+  setSearchPanelOpen(false);
 }
 
 async function initializeMap() {

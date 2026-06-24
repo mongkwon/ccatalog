@@ -43,14 +43,7 @@
           </div>
         </header>
 
-        <aside class="restaurant-panel" aria-label="맛집 목록">
-          <div class="search-row">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="m21 21-5-5m2-5a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z" />
-            </svg>
-            <input id="searchInput" type="search" placeholder="맛집, 동네, 메뉴" autocomplete="off" />
-          </div>
-
+        <aside id="restaurantPanel" class="restaurant-panel" aria-label="맛집 목록" aria-hidden="true">
           <div class="filter-row" role="group" aria-label="별 필터">
             <button class="filter-chip is-active" type="button" data-filter="all">전체</button>
             <button class="filter-chip" type="button" data-filter="0">소개</button>
@@ -65,11 +58,48 @@
           </div>
 
           <div id="restaurantList" class="restaurant-list"></div>
+        </aside>
 
-          <button id="addButton" class="panel-add-button" type="button" title="맛집 추가" aria-label="맛집 추가">
+        <div id="searchPanel" class="search-panel" aria-hidden="true">
+          <div class="search-row">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="m21 21-5-5m2-5a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z" />
+            </svg>
+            <input id="searchInput" type="search" placeholder="맛집, 동네, 메뉴" autocomplete="off" />
+          </div>
+        </div>
+
+        <nav class="bottom-dock" aria-label="지도 도구">
+          <button
+            id="panelToggle"
+            class="dock-button"
+            type="button"
+            title="필터와 목록"
+            aria-label="필터와 목록"
+            aria-controls="restaurantPanel"
+            aria-expanded="false"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 7h16M4 12h16M4 17h16" />
+            </svg>
+          </button>
+          <button
+            id="searchToggle"
+            class="dock-button"
+            type="button"
+            title="검색"
+            aria-label="검색"
+            aria-controls="searchPanel"
+            aria-expanded="false"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="m21 21-5-5m2-5a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z" />
+            </svg>
+          </button>
+          <button id="addButton" class="dock-button dock-button-primary" type="button" title="맛집 추가" aria-label="맛집 추가">
             <span aria-hidden="true">+</span>
           </button>
-        </aside>
+        </nav>
 
         <article id="selectedCard" class="selected-card hidden" aria-live="polite"></article>
       </section>
