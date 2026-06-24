@@ -331,14 +331,15 @@ button {
   left: 50%;
   bottom: var(--floating-bottom);
   display: grid;
-  width: min(860px, calc(100vw - 32px));
-  max-height: 132px;
+  width: min(500px, calc(100vw - 32px));
   transform: translate(-50%, 10px);
-  grid-template-areas: "meta list";
-  grid-template-columns: 150px minmax(0, 1fr);
-  gap: 10px 12px;
-  padding: 12px;
-  border-radius: 34px;
+  grid-template-areas:
+    "meta"
+    "list";
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+  padding: 16px;
+  border-radius: 28px;
   opacity: 0;
   pointer-events: none;
   visibility: hidden;
@@ -459,12 +460,11 @@ button {
   grid-area: meta;
   display: flex;
   min-width: 0;
-  flex-direction: column;
+  flex-direction: row;
   align-items: flex-start;
-  justify-content: center;
-  gap: 4px;
+  justify-content: flex-start;
   overflow: hidden;
-  padding: 0 6px 0 3px;
+  padding: 0 2px;
   color: var(--muted);
   font-size: 12px;
 }
@@ -476,13 +476,6 @@ button {
   color: var(--ink);
   font-size: 20px;
   font-weight: 900;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.panel-meta span {
-  min-width: 0;
-  overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -713,7 +706,7 @@ button {
 }
 
 .is-list-open .selected-card {
-  bottom: calc(var(--floating-bottom) + 148px);
+  bottom: calc(var(--floating-bottom) + 168px);
 }
 
 .selected-card p {
@@ -1440,17 +1433,8 @@ button {
 }
 
 @media (max-width: 940px) {
-  .restaurant-panel {
-    width: min(760px, calc(100vw - 32px));
-    grid-template-areas:
-      "meta"
-      "list";
-    grid-template-columns: minmax(0, 1fr);
-    max-height: 160px;
-  }
-
   .is-list-open .selected-card {
-    bottom: calc(var(--floating-bottom) + 176px);
+    bottom: calc(var(--floating-bottom) + 168px);
   }
 }
 
@@ -1502,15 +1486,10 @@ button {
     bottom: var(--floating-bottom);
     left: 12px;
     width: auto;
-    max-height: 172px;
     transform: translateY(10px);
-    grid-template-areas:
-      "meta"
-      "list";
-    grid-template-columns: minmax(0, 1fr);
     gap: 8px;
-    padding: 10px;
-    border-radius: 28px;
+    padding: 14px;
+    border-radius: 26px;
   }
 
   .restaurant-panel.is-open {
@@ -1540,15 +1519,11 @@ button {
   }
 
   .panel-meta {
-    padding: 0 4px;
+    padding: 0 2px;
   }
 
   .panel-meta strong {
     font-size: 17px;
-  }
-
-  .panel-meta span {
-    display: none;
   }
 
   .restaurant-item,
@@ -1591,7 +1566,7 @@ button {
   }
 
   .is-list-open .selected-card {
-    bottom: calc(var(--floating-bottom) + 188px);
+    bottom: calc(var(--floating-bottom) + 152px);
   }
 
   .form-grid {
@@ -1638,9 +1613,10 @@ button {
 
   .restaurant-panel {
     bottom: var(--floating-bottom);
-    max-height: 128px;
-    gap: 8px 10px;
-    padding: 10px;
+    width: min(660px, calc(100vw - 24px));
+    gap: 8px;
+    padding: 12px;
+    border-radius: 24px;
   }
 
   .is-search-open .restaurant-panel {
@@ -1726,10 +1702,6 @@ button {
     font-size: 18px;
   }
 
-  .panel-meta span {
-    display: none;
-  }
-
   .selected-card {
     bottom: var(--floating-bottom);
     width: min(660px, calc(100vw - 24px));
@@ -1761,6 +1733,19 @@ button {
 }
 
 @media (max-width: 680px) and (max-height: 760px) {
+  .restaurant-panel {
+    right: 12px;
+    left: 12px;
+    width: auto;
+    transform: translateY(10px);
+    padding: 11px 12px;
+    border-radius: 23px;
+  }
+
+  .restaurant-panel.is-open {
+    transform: translateY(0);
+  }
+
   .selected-card {
     right: 12px;
     bottom: var(--floating-bottom);

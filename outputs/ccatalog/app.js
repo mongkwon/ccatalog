@@ -164,7 +164,6 @@ function cacheElements() {
   els.searchInput = document.getElementById("searchInput");
   els.restaurantList = document.getElementById("restaurantList");
   els.resultCount = document.getElementById("resultCount");
-  els.ratingSummary = document.getElementById("ratingSummary");
   els.selectedCard = document.getElementById("selectedCard");
   els.dockCluster = document.querySelector(".dock-cluster");
   els.bottomDock = document.querySelector(".bottom-dock");
@@ -1018,12 +1017,7 @@ function renderList(restaurants) {
 }
 
 function renderMeta(restaurants) {
-  const counts = { 1: 0, 2: 0, 3: 0 };
-  restaurants.forEach((restaurant) => {
-    counts[restaurant.rating] += 1;
-  });
   els.resultCount.textContent = `${restaurants.length}곳`;
-  els.ratingSummary.textContent = `동메달 ${counts[1]} · 은메달 ${counts[2]} · 금메달 ${counts[3]}`;
 }
 
 function renderSelectedCard(visibleRestaurants) {
