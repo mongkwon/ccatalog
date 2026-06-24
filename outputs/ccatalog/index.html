@@ -6,8 +6,8 @@
     <title>까탈로그</title>
     <link rel="icon" href="data:," />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" />
-    <link rel="stylesheet" href="./styles.css?v=20260624-pin-surface" />
-    <script defer src="./app.js?v=20260624-medals"></script>
+    <link rel="stylesheet" href="./styles.css?v=20260624-filter-dock" />
+    <script defer src="./app.js?v=20260624-filter-dock"></script>
   </head>
   <body>
     <main class="app-shell">
@@ -30,20 +30,43 @@
 
         <header class="topbar">
           <div class="brand">
-            <span class="brand-mark" aria-hidden="true">까</span>
+            <button
+              id="addButton"
+              class="brand-add-button"
+              type="button"
+              title="맛집 추가"
+              aria-label="맛집 추가"
+              aria-controls="spotDialog"
+              aria-expanded="false"
+            >
+              <span aria-hidden="true">+</span>
+            </button>
             <div>
               <h1>까탈로그</h1>
               <p>취향에 엄격한 맛집 지도</p>
             </div>
           </div>
+          <button
+            id="panelToggle"
+            class="topbar-menu-button"
+            type="button"
+            title="맛집 목록"
+            aria-label="맛집 목록"
+            aria-controls="restaurantPanel"
+            aria-expanded="false"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 7h16M4 12h16M4 17h16" />
+            </svg>
+          </button>
         </header>
 
         <aside id="restaurantPanel" class="restaurant-panel" aria-label="맛집 목록" aria-hidden="true">
-          <div class="filter-row" role="group" aria-label="등급 필터">
-            <button class="filter-chip is-active" type="button" data-filter="all">전체</button>
-            <button class="filter-chip" type="button" data-filter="1">동메달</button>
-            <button class="filter-chip" type="button" data-filter="2">은메달</button>
-            <button class="filter-chip" type="button" data-filter="3">금메달</button>
+          <div class="search-row">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="m21 21-5-5m2-5a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z" />
+            </svg>
+            <input id="searchInput" type="search" placeholder="맛집, 동네, 메뉴" autocomplete="off" />
           </div>
 
           <div class="panel-meta">
@@ -54,54 +77,12 @@
           <div id="restaurantList" class="restaurant-list"></div>
         </aside>
 
-        <div id="searchPanel" class="search-panel" aria-hidden="true">
-          <div class="search-row">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="m21 21-5-5m2-5a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z" />
-            </svg>
-            <input id="searchInput" type="search" placeholder="맛집, 동네, 메뉴" autocomplete="off" />
-          </div>
-        </div>
-
-        <nav class="bottom-dock" aria-label="지도 도구">
+        <nav class="bottom-dock" aria-label="등급 필터">
           <span class="dock-indicator" aria-hidden="true"></span>
-          <button
-            id="panelToggle"
-            class="dock-button"
-            type="button"
-            title="필터와 목록"
-            aria-label="필터와 목록"
-            aria-controls="restaurantPanel"
-            aria-expanded="false"
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M4 7h16M4 12h16M4 17h16" />
-            </svg>
-          </button>
-          <button
-            id="searchToggle"
-            class="dock-button"
-            type="button"
-            title="검색"
-            aria-label="검색"
-            aria-controls="searchPanel"
-            aria-expanded="false"
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="m21 21-5-5m2-5a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z" />
-            </svg>
-          </button>
-          <button
-            id="addButton"
-            class="dock-button dock-button-primary"
-            type="button"
-            title="맛집 추가"
-            aria-label="맛집 추가"
-            aria-controls="spotDialog"
-            aria-expanded="false"
-          >
-            <span aria-hidden="true">+</span>
-          </button>
+          <button class="dock-filter-button is-active" type="button" data-filter="all">전체</button>
+          <button class="dock-filter-button" type="button" data-filter="1">동메달</button>
+          <button class="dock-filter-button" type="button" data-filter="2">은메달</button>
+          <button class="dock-filter-button" type="button" data-filter="3">금메달</button>
         </nav>
 
         <article id="selectedCard" class="selected-card hidden" aria-live="polite"></article>

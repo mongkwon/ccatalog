@@ -1,7 +1,6 @@
 const STORAGE_KEY = "ccatalog.restaurants.v1";
 const SUPABASE_SDK_URL = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
 const SUPABASE_TABLE = "restaurants";
-const DOCK_SLIDE_ACTIVATION_MS = 180;
 const runtimeConfig = {
   naverMapKey: "",
   supabaseUrl: "",
@@ -110,7 +109,6 @@ const dockDragState = {
   isDragging: false,
   suppressClick: false,
 };
-let dockActivationTimer = null;
 let spotDialogOpenFrame = null;
 
 document.addEventListener("DOMContentLoaded", init);
@@ -147,7 +145,6 @@ function cacheElements() {
   els.mockMap = document.getElementById("mockMap");
   els.mockPins = document.getElementById("mockPins");
   els.restaurantPanel = document.getElementById("restaurantPanel");
-  els.searchPanel = document.getElementById("searchPanel");
   els.searchInput = document.getElementById("searchInput");
   els.restaurantList = document.getElementById("restaurantList");
   els.resultCount = document.getElementById("resultCount");
@@ -157,7 +154,6 @@ function cacheElements() {
   els.dockIndicator = document.querySelector(".dock-indicator");
   els.addButton = document.getElementById("addButton");
   els.panelToggle = document.getElementById("panelToggle");
-  els.searchToggle = document.getElementById("searchToggle");
   els.spotDialog = document.getElementById("spotDialog");
   els.spotForm = document.getElementById("spotForm");
   els.spotDialogTitle = document.getElementById("spotDialogTitle");
@@ -171,7 +167,7 @@ function cacheElements() {
   els.menuDraftInput = document.getElementById("menuDraftInput");
   els.addMenuButton = document.getElementById("addMenuButton");
   els.menuInputList = document.getElementById("menuInputList");
-  els.filterButtons = [...document.querySelectorAll(".filter-chip")];
+  els.filterButtons = [...document.querySelectorAll(".dock-filter-button")];
 }
 
 function bindEvents() {
@@ -182,22 +178,23 @@ function bindEvents() {
 
   els.filterButtons.forEach((button) => {
     button.addEventListener("click", () => {
-      state.filter = button.dataset.filter;
-      els.filterButtons.forEach((item) => item.classList.toggle("is-active", item === button));
-      render();
+      setFilter(button.dataset.filter);
     });
   });
 
   els.panelToggle.addEventListener("click", () => {
-    slideDockThenActivate("list", { toggle: true });
-  });
-
-  els.searchToggle.addEventListener("click", () => {
-    slideDockThenActivate("search", { toggle: true });
+    closeSpotDialog();
+    closeSelectedRestaurant();
+    setRestaurantPanelOpen(true);
   });
 
   els.addButton.addEventListener("click", () => {
-    slideDockThenActivate("add", { toggle: true });
+    if (isSpotDialogOpen()) {
+      closeSpotDialog();
+      return;
+    }
+
+    openSpotDialog();
   });
 
   els.bottomDock.addEventListener("click", handleDockClickCapture, true);
@@ -248,89 +245,32 @@ function setRestaurantPanelOpen(isOpen) {
   els.panelToggle.classList.toggle("is-active", isOpen);
   els.panelToggle.setAttribute("aria-expanded", String(isOpen));
   document.body.classList.toggle("is-list-open", isOpen);
-  updateDockIndicator();
-}
-
-function setSearchPanelOpen(isOpen) {
-  els.searchPanel.classList.toggle("is-open", isOpen);
-  els.searchPanel.setAttribute("aria-hidden", String(!isOpen));
-  els.searchToggle.classList.toggle("is-active", isOpen);
-  els.searchToggle.setAttribute("aria-expanded", String(isOpen));
-  document.body.classList.toggle("is-search-open", isOpen);
-  updateDockIndicator();
 }
 
 function closeFloatingPanels() {
   setRestaurantPanelOpen(false);
-  setSearchPanelOpen(false);
 }
 
-function slideDockThenActivate(target, { toggle = false } = {}) {
-  window.clearTimeout(dockActivationTimer);
-
-  const targetIndex = getDockTargetIndex(target);
-  const activeIndex = getActiveDockIndex();
-  const shouldCloseActive = toggle && targetIndex === activeIndex;
-
-  if (targetIndex >= 0 && !shouldCloseActive) {
-    setDockIndicatorToIndex(targetIndex);
-  }
-
-  dockActivationTimer = window.setTimeout(() => {
-    dockActivationTimer = null;
-    activateDockTarget(target, { toggle });
-  }, shouldCloseActive ? 0 : DOCK_SLIDE_ACTIVATION_MS);
-}
-
-function activateDockTarget(target, { toggle = false } = {}) {
-  window.clearTimeout(dockActivationTimer);
-  dockActivationTimer = null;
-
-  if (target === "list") {
-    const nextOpen = toggle ? !els.restaurantPanel.classList.contains("is-open") : true;
-    closeSpotDialog();
-    closeSelectedRestaurant();
-    setSearchPanelOpen(false);
-    setRestaurantPanelOpen(nextOpen);
+function setFilter(filter) {
+  const nextFilter = filter || "all";
+  if (state.filter === nextFilter) {
+    updateDockIndicator();
     return;
   }
 
-  if (target === "search") {
-    const nextOpen = toggle ? !els.searchPanel.classList.contains("is-open") : true;
-    closeSpotDialog();
-    closeSelectedRestaurant();
-    setRestaurantPanelOpen(false);
-    setSearchPanelOpen(nextOpen);
-    if (nextOpen) {
-      els.searchInput.focus();
-    }
-    return;
-  }
-
-  if (target === "add") {
-    const shouldOpen = toggle ? !isSpotDialogOpen() : true;
-    closeFloatingPanels();
-    closeSpotDialog();
-    closeSelectedRestaurant();
-    if (shouldOpen) {
-      openSpotDialog();
-    }
-  }
+  state.filter = nextFilter;
+  els.filterButtons.forEach((button) => {
+    button.classList.toggle("is-active", button.dataset.filter === nextFilter);
+  });
+  render();
 }
 
 function getDockButtons() {
-  return [els.panelToggle, els.searchToggle, els.addButton];
-}
-
-function getDockTargetIndex(target) {
-  return ["list", "search", "add"].indexOf(target);
+  return els.filterButtons;
 }
 
 function getActiveDockIndex() {
-  if (els.restaurantPanel.classList.contains("is-open")) return 0;
-  if (els.searchPanel.classList.contains("is-open")) return 1;
-  if (isSpotDialogOpen()) return 2;
-  return -1;
+  return getDockButtons().findIndex((button) => button.dataset.filter === state.filter);
 }
 
 function updateDockIndicator() {
@@ -392,7 +332,6 @@ function handleDockPointerMove(event) {
 
 function handleDockPointerUp(event) {
   if (event.pointerId !== dockDragState.pointerId) return;
-  const didDrag = dockDragState.isDragging;
   const targetIndex = getNearestDockIndex(event.clientX);
   finishDockDrag(event);
 
@@ -403,12 +342,10 @@ function handleDockPointerUp(event) {
     dockDragState.suppressClick = false;
   }, 120);
 
-  const target = ["list", "search", "add"][targetIndex];
-  if (didDrag) {
-    activateDockTarget(target, { toggle: false });
-  } else {
-    slideDockThenActivate(target, { toggle: true });
-  }
+  const targetButton = getDockButtons()[targetIndex];
+  if (!targetButton?.dataset.filter) return;
+  setDockIndicatorToIndex(targetIndex);
+  setFilter(targetButton.dataset.filter);
 }
 
 function cancelDockDrag(event) {
@@ -846,7 +783,8 @@ function render() {
   renderList(visibleRestaurants);
   renderMeta(visibleRestaurants);
   renderSelectedCard(visibleRestaurants);
-  state.map?.render(visibleRestaurants, state.selectedId, selectRestaurant);
+  state.map?.render(visibleRestaurants, state.selectedId, (id) => selectRestaurant(id, { closePanel: true }));
+  updateDockIndicator();
 }
 
 function getVisibleRestaurants() {
@@ -958,7 +896,11 @@ function renderSelectedCard(visibleRestaurants) {
   els.selectedCard.classList.remove("hidden");
 }
 
-function selectRestaurant(id) {
+function selectRestaurant(id, { closePanel = false } = {}) {
+  if (closePanel) {
+    closeFloatingPanels();
+  }
+
   state.selectedId = id;
   const restaurant = state.restaurants.find((item) => item.id === id);
   if (restaurant) {

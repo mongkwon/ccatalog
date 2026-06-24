@@ -210,9 +210,9 @@ button {
 }
 
 .brand,
+.topbar-menu-button,
 .bottom-dock,
 .restaurant-panel,
-.search-panel,
 .selected-card,
 .modal-card {
   position: relative;
@@ -225,9 +225,9 @@ button {
 }
 
 .brand::before,
+.topbar-menu-button::before,
 .bottom-dock::before,
 .restaurant-panel::before,
-.search-panel::before,
 .selected-card::before,
 .modal-card::before {
   display: none;
@@ -243,18 +243,59 @@ button {
   pointer-events: auto;
 }
 
-.brand-mark {
+.brand-add-button {
   display: grid;
   width: 42px;
   height: 42px;
   place-items: center;
   border: 1px solid rgba(17, 24, 32, 0.08);
   border-radius: 50%;
+  padding: 0;
   color: #062936;
   background: rgba(203, 238, 244, 0.62);
   box-shadow: 0 1px 0 rgba(17, 24, 32, 0.04);
-  font-size: 18px;
-  font-weight: 900;
+  pointer-events: auto;
+}
+
+.brand-add-button:hover,
+.brand-add-button.is-active {
+  border-color: rgba(17, 24, 32, 0.16);
+  background: rgba(17, 24, 32, 0.04);
+}
+
+.brand-add-button span {
+  transform: translateY(-2px);
+  font-size: 31px;
+  font-weight: 500;
+  line-height: 1;
+}
+
+.topbar-menu-button {
+  display: grid;
+  width: 52px;
+  height: 52px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 50%;
+  padding: 0;
+  color: #1c2630;
+  pointer-events: auto;
+}
+
+.topbar-menu-button:hover,
+.topbar-menu-button.is-active {
+  border-color: rgba(17, 24, 32, 0.16);
+  background: rgba(17, 24, 32, 0.04);
+}
+
+.topbar-menu-button svg {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
 }
 
 .brand h1,
@@ -316,10 +357,10 @@ button {
   bottom: var(--floating-bottom);
   display: grid;
   width: min(860px, calc(100vw - 32px));
-  max-height: 220px;
+  max-height: 230px;
   transform: translate(-50%, 10px);
   grid-template-areas:
-    "filters filters"
+    "search search"
     "meta list";
   grid-template-columns: 170px minmax(0, 1fr);
   gap: 10px 12px;
@@ -341,32 +382,8 @@ button {
   visibility: visible;
 }
 
-.search-panel {
-  position: absolute;
-  z-index: 19;
-  left: 50%;
-  bottom: var(--floating-bottom);
-  width: min(520px, calc(100vw - 32px));
-  padding: 10px;
-  border-radius: 30px;
-  opacity: 0;
-  pointer-events: none;
-  transform: translate(-50%, 10px);
-  visibility: hidden;
-  transition:
-    opacity 160ms ease,
-    transform 160ms ease,
-    visibility 160ms ease;
-}
-
-.search-panel.is-open {
-  opacity: 1;
-  pointer-events: auto;
-  transform: translate(-50%, 0);
-  visibility: visible;
-}
-
 .search-row {
+  grid-area: search;
   display: grid;
   grid-template-columns: 20px 1fr;
   align-items: center;
@@ -406,38 +423,6 @@ button {
 
 .search-row input::placeholder {
   color: var(--muted);
-}
-
-.filter-row {
-  grid-area: filters;
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 7px;
-}
-
-.filter-chip {
-  height: 44px;
-  border: 1px solid rgba(17, 24, 32, 0.1);
-  border-radius: 999px;
-  color: var(--soft-ink);
-  background: rgba(255, 255, 255, 0.24);
-  box-shadow: none;
-  font-size: 12px;
-  font-weight: 900;
-  letter-spacing: 0;
-  white-space: nowrap;
-}
-
-.filter-chip:hover {
-  background: rgba(17, 24, 32, 0.04);
-}
-
-.filter-chip.is-active {
-  border-color: rgba(18, 159, 189, 0.26);
-  color: #063342;
-  background: rgba(205, 236, 242, 0.48);
-  backdrop-filter: blur(16px) saturate(1.45);
-  -webkit-backdrop-filter: blur(16px) saturate(1.45);
 }
 
 .panel-meta {
@@ -679,10 +664,6 @@ button {
   bottom: calc(var(--floating-bottom) + 236px);
 }
 
-.is-search-open .selected-card {
-  bottom: calc(var(--floating-bottom) + 80px);
-}
-
 .selected-card p {
   margin: 0;
 }
@@ -759,14 +740,15 @@ button {
 
 .bottom-dock {
   --dock-indicator-x: 7px;
-  --dock-indicator-width: 74px;
-  --dock-indicator-opacity: 0;
+  --dock-indicator-width: 78px;
+  --dock-indicator-opacity: 1;
   position: absolute;
   z-index: 30;
   left: 50%;
   bottom: var(--dock-bottom);
   display: grid;
-  grid-template-columns: 74px 74px 86px;
+  width: min(430px, calc(100vw - 32px));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 7px;
   padding: 7px;
   border-radius: 999px;
@@ -806,7 +788,7 @@ button {
     opacity 80ms ease;
 }
 
-.dock-button {
+.dock-filter-button {
   position: relative;
   z-index: 1;
   display: grid;
@@ -815,51 +797,25 @@ button {
   place-items: center;
   border: 1px solid transparent;
   border-radius: 999px;
+  padding: 0 10px;
   color: #1c2630;
   background: transparent;
   box-shadow: none;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0;
+  white-space: nowrap;
 }
 
-.dock-button:hover {
+.dock-filter-button:hover {
   border-color: rgba(17, 24, 32, 0.08);
   background: rgba(17, 24, 32, 0.04);
 }
 
-.dock-button.is-active {
+.dock-filter-button.is-active {
   border-color: transparent;
   color: #111820;
   background: transparent;
-}
-
-.dock-button svg {
-  width: 22px;
-  height: 22px;
-  fill: none;
-  stroke: currentColor;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 2;
-}
-
-.dock-button-primary {
-  color: #1c2630;
-}
-
-.dock-button-primary:hover {
-  color: #111820;
-  background: rgba(17, 24, 32, 0.04);
-}
-
-.dock-button-primary.is-active {
-  color: #111820;
-  background: transparent;
-}
-
-.dock-button-primary span {
-  transform: translateY(-2px);
-  font-size: 34px;
-  font-weight: 500;
-  line-height: 1;
 }
 
 .pin-marker {
@@ -1294,7 +1250,7 @@ button {
   .restaurant-panel {
     width: min(760px, calc(100vw - 32px));
     grid-template-areas:
-      "filters"
+      "search"
       "meta"
       "list";
     grid-template-columns: minmax(0, 1fr);
@@ -1340,10 +1296,18 @@ button {
     font-size: 18px;
   }
 
-  .brand-mark {
+  .brand-add-button {
     width: 38px;
     height: 38px;
-    font-size: 17px;
+  }
+
+  .brand-add-button span {
+    font-size: 29px;
+  }
+
+  .topbar-menu-button {
+    width: 46px;
+    height: 46px;
   }
 
   .restaurant-panel {
@@ -1354,7 +1318,7 @@ button {
     max-height: 250px;
     transform: translateY(10px);
     grid-template-areas:
-      "filters"
+      "search"
       "meta"
       "list";
     grid-template-columns: minmax(0, 1fr);
@@ -1367,24 +1331,13 @@ button {
     transform: translateY(0);
   }
 
-  .search-panel {
-    right: 12px;
-    bottom: var(--floating-bottom);
-    left: 12px;
-    width: auto;
-    transform: translateY(10px);
-  }
-
-  .search-panel.is-open {
-    transform: translateY(0);
-  }
-
   .bottom-dock {
-    grid-template-columns: 68px 68px 78px;
+    width: calc(100vw - 24px);
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     padding: 7px;
   }
 
-  .dock-button {
+  .dock-filter-button {
     width: 100%;
     height: var(--dock-button-height);
   }
@@ -1392,17 +1345,6 @@ button {
   .search-row {
     height: 40px;
     padding: 0 13px;
-  }
-
-  .filter-row {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 5px;
-  }
-
-  .filter-chip {
-    height: 34px;
-    padding: 0 3px;
-    font-size: 11px;
   }
 
   .panel-meta {
@@ -1454,10 +1396,6 @@ button {
   .selected-card h2 {
     max-width: none;
     font-size: 20px;
-  }
-
-  .is-search-open .selected-card {
-    bottom: calc(var(--floating-bottom) + 68px);
   }
 
   .is-list-open .selected-card {
@@ -1513,10 +1451,6 @@ button {
     padding: 10px;
   }
 
-  .search-panel {
-    bottom: var(--floating-bottom);
-  }
-
   .modal {
     bottom: var(--floating-bottom);
     max-height: calc(100dvh - var(--floating-bottom) - 18px);
@@ -1570,7 +1504,7 @@ button {
   }
 
   .search-row,
-  .filter-chip {
+  .dock-filter-button {
     height: 38px;
   }
 
@@ -1605,10 +1539,6 @@ button {
     width: min(660px, calc(100vw - 24px));
     padding: 12px;
     border-radius: 24px;
-  }
-
-  .is-search-open .selected-card {
-    bottom: calc(var(--floating-bottom) + 62px);
   }
 
   .is-list-open .selected-card {
@@ -1654,17 +1584,14 @@ button {
     min-height: 24px;
   }
 
-  .is-search-open .selected-card {
-    bottom: calc(var(--floating-bottom) + 62px);
-  }
-
   .is-list-open .selected-card {
     bottom: calc(var(--floating-bottom) + 162px);
   }
 }
 
 @media (max-width: 380px) {
-  .filter-chip {
+  .dock-filter-button {
+    padding: 0 6px;
     font-size: 10px;
   }
 
