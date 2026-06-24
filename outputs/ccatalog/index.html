@@ -6,8 +6,8 @@
     <title>까탈로그</title>
     <link rel="icon" href="data:," />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" />
-    <link rel="stylesheet" href="./styles.css?v=20260624-modal-clean" />
-    <script defer src="./app.js?v=20260624-modal-clean"></script>
+    <link rel="stylesheet" href="./styles.css?v=20260624-morph-search" />
+    <script defer src="./app.js?v=20260624-morph-search"></script>
   </head>
   <body>
     <main class="app-shell">
@@ -58,14 +58,6 @@
         </aside>
 
         <div class="dock-cluster">
-          <div id="searchPanel" class="search-panel" aria-hidden="true">
-            <div class="search-row">
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="m21 21-5-5m2-5a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z" />
-              </svg>
-              <input id="searchInput" type="search" placeholder="맛집, 동네, 메뉴" autocomplete="off" />
-            </div>
-          </div>
           <nav class="bottom-dock" aria-label="등급 필터">
             <span class="dock-indicator" aria-hidden="true"></span>
             <button
@@ -86,19 +78,27 @@
             <button class="dock-filter-button" type="button" data-filter="2">은메달</button>
             <button class="dock-filter-button" type="button" data-filter="3">금메달</button>
           </nav>
-          <button
-            id="searchToggle"
-            class="dock-search-button"
-            type="button"
-            title="검색"
-            aria-label="검색"
-            aria-controls="searchPanel"
-            aria-expanded="false"
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="m21 21-5-5m2-5a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z" />
-            </svg>
-          </button>
+          <div id="searchPanel" class="search-panel" role="search" aria-label="맛집 검색">
+            <button
+              id="searchToggle"
+              class="dock-search-button"
+              type="button"
+              title="검색"
+              aria-label="검색"
+              aria-controls="searchInput"
+              aria-expanded="false"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="m21 21-5-5m2-5a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z" />
+              </svg>
+            </button>
+            <div class="search-row" aria-hidden="true">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="m21 21-5-5m2-5a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z" />
+              </svg>
+              <input id="searchInput" type="search" placeholder="맛집, 동네, 메뉴" autocomplete="off" tabindex="-1" />
+            </div>
+          </div>
         </div>
 
         <article id="selectedCard" class="selected-card hidden" aria-live="polite"></article>

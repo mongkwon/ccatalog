@@ -147,6 +147,7 @@ function cacheElements() {
   els.mockPins = document.getElementById("mockPins");
   els.restaurantPanel = document.getElementById("restaurantPanel");
   els.searchPanel = document.getElementById("searchPanel");
+  els.searchRow = document.querySelector(".search-row");
   els.searchInput = document.getElementById("searchInput");
   els.restaurantList = document.getElementById("restaurantList");
   els.resultCount = document.getElementById("resultCount");
@@ -274,12 +275,17 @@ function setRestaurantPanelOpen(isOpen) {
 
 function setSearchPanelOpen(isOpen) {
   els.searchPanel.classList.toggle("is-open", isOpen);
-  els.searchPanel.setAttribute("aria-hidden", String(!isOpen));
+  els.searchPanel.setAttribute("aria-expanded", String(isOpen));
+  els.searchRow.setAttribute("aria-hidden", String(!isOpen));
+  els.searchInput.tabIndex = isOpen ? 0 : -1;
   els.dockCluster.classList.toggle("is-search-mode", isOpen);
   els.searchToggle.classList.toggle("is-active", isOpen);
   els.searchToggle.setAttribute("aria-expanded", String(isOpen));
   els.filterModeButton.setAttribute("aria-expanded", String(isOpen));
   document.body.classList.toggle("is-search-open", isOpen);
+  if (!isOpen && document.activeElement === els.searchInput) {
+    els.searchInput.blur();
+  }
   updateDockIndicator();
 }
 
