@@ -227,6 +227,7 @@ function bindEvents() {
 
   els.placeSearchButton.addEventListener("click", searchPlaces);
   els.nameInput.addEventListener("input", handlePlaceNameInput);
+  els.nameInput.addEventListener("keydown", handlePlaceNameKeydown);
 
   els.addMenuButton.addEventListener("click", () => {
     addMenuFromDraft();
@@ -497,6 +498,7 @@ function closeSelectedRestaurant() {
 }
 
 async function searchPlaces() {
+  clearPlaceValidation();
   const query = els.nameInput.value.trim();
   if (query.length < 2) {
     renderPlaceMessage("두 글자 이상 입력해주세요");
@@ -601,6 +603,14 @@ function clearPlaceResults() {
 function handlePlaceNameInput() {
   clearPlaceResults();
   clearSelectedPlaceCandidate();
+}
+
+function handlePlaceNameKeydown(event) {
+  if (event.key !== "Enter" || event.isComposing || event.keyCode === 229) return;
+  event.preventDefault();
+  event.stopPropagation();
+  if (els.placeSearchButton.disabled) return;
+  searchPlaces();
 }
 
 function clearSelectedPlaceCandidate() {
