@@ -7,6 +7,8 @@ const runtimeConfig = {
   supabaseAnonKey: "",
 };
 const DEFAULT_CENTER = { lat: 37.566535, lng: 126.977969 };
+const USER_LOCATION_TIMEOUT_MS = 7000;
+const USER_LOCATION_MAX_AGE_MS = 5 * 60 * 1000;
 const MOCK_BOUNDS = {
   latMin: 37.47,
   latMax: 37.62,
@@ -862,6 +864,40 @@ async function activateMap(adapter) {
     state.lastMapCoord = coord;
   });
   state.map = adapter;
+  state.lastMapCoord = adapter.getCenter();
+  centerMapOnUserLocation(adapter);
+}
+
+async function centerMapOnUserLocation(adapter) {
+  const coord = await getUserLocationCoord().catch(() => null);
+  if (!coord || state.map !== adapter || state.selectedId) return;
+
+  state.lastMapCoord = coord;
+  adapter.panTo(coord);
+}
+
+function getUserLocationCoord() {
+  if (!navigator.geolocation) {
+    return Promise.resolve(null);
+  }
+
+  return new Promise((resolve) => {
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const coord = {
+          lat: Number(position.coords.latitude),
+          lng: Number(position.coords.longitude),
+        };
+        resolve(isValidCoordinate(coord) ? coord : null);
+      },
+      () => resolve(null),
+      {
+        enableHighAccuracy: false,
+        maximumAge: USER_LOCATION_MAX_AGE_MS,
+        timeout: USER_LOCATION_TIMEOUT_MS,
+      }
+    );
+  });
 }
 
 function render() {
