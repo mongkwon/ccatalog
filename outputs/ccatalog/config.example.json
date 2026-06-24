@@ -1,3 +1,5 @@
 {
-  "naverMapKey": "YOUR_NAVER_MAP_NCP_KEY_ID"
+  "naverMapKey": "YOUR_NAVER_MAP_NCP_KEY_ID",
+  "supabaseUrl": "https://YOUR_PROJECT_ID.supabase.co",
+  "supabaseAnonKey": "YOUR_SUPABASE_ANON_KEY"
 }

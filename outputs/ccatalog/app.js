@@ -1,7 +1,11 @@
 const STORAGE_KEY = "ccatalog.restaurants.v1";
+const SUPABASE_SDK_URL = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
+const SUPABASE_TABLE = "restaurants";
 const DOCK_SLIDE_ACTIVATION_MS = 180;
 const runtimeConfig = {
   naverMapKey: "",
+  supabaseUrl: "",
+  supabaseAnonKey: "",
 };
 const DEFAULT_CENTER = { lat: 37.566535, lng: 126.977969 };
 const MOCK_BOUNDS = {
@@ -88,12 +92,13 @@ const seedRestaurants = [
 ];
 
 const state = {
-  restaurants: loadRestaurants(),
+  restaurants: structuredClone(seedRestaurants),
   selectedId: null,
   query: "",
   filter: "all",
   map: null,
   lastMapCoord: DEFAULT_CENTER,
+  store: null,
 };
 
 const els = {};
@@ -113,6 +118,7 @@ async function init() {
   cacheElements();
   bindEvents();
   await loadRuntimeConfig();
+  await initializeDataStore();
   await initializeMap();
   render();
 }
@@ -126,8 +132,12 @@ async function loadRuntimeConfig() {
 
     const config = await response.json();
     runtimeConfig.naverMapKey = typeof config.naverMapKey === "string" ? config.naverMapKey.trim() : "";
+    runtimeConfig.supabaseUrl = typeof config.supabaseUrl === "string" ? config.supabaseUrl.trim() : "";
+    runtimeConfig.supabaseAnonKey = typeof config.supabaseAnonKey === "string" ? config.supabaseAnonKey.trim() : "";
   } catch {
     runtimeConfig.naverMapKey = "";
+    runtimeConfig.supabaseUrl = "";
+    runtimeConfig.supabaseAnonKey = "";
   }
 }
 
@@ -150,6 +160,11 @@ function cacheElements() {
   els.spotDialog = document.getElementById("spotDialog");
   els.spotForm = document.getElementById("spotForm");
   els.spotDialogTitle = document.getElementById("spotDialogTitle");
+  els.nameInput = document.getElementById("nameInput");
+  els.categoryInput = document.getElementById("categoryInput");
+  els.areaInput = document.getElementById("areaInput");
+  els.placeSearchButton = document.getElementById("placeSearchButton");
+  els.placeResultList = document.getElementById("placeResultList");
   els.menuDraftInput = document.getElementById("menuDraftInput");
   els.addMenuButton = document.getElementById("addMenuButton");
   els.menuInputList = document.getElementById("menuInputList");
@@ -206,6 +221,9 @@ function bindEvents() {
       }
     });
   });
+
+  els.placeSearchButton.addEventListener("click", searchPlaces);
+  els.nameInput.addEventListener("input", clearPlaceResults);
 
   els.addMenuButton.addEventListener("click", () => {
     addMenuFromDraft();
@@ -475,6 +493,180 @@ function closeSelectedRestaurant() {
   render();
 }
 
+async function searchPlaces() {
+  const query = els.nameInput.value.trim();
+  if (query.length < 2) {
+    renderPlaceMessage("두 글자 이상 입력해주세요");
+    return;
+  }
+
+  els.placeSearchButton.disabled = true;
+  renderPlaceMessage("검색 중");
+
+  try {
+    const places = await fetchPlaceCandidates(query);
+    renderPlaceResults(places);
+  } catch (error) {
+    console.warn("place search failed", error);
+    renderPlaceMessage("장소 검색 설정이 필요합니다");
+  } finally {
+    els.placeSearchButton.disabled = false;
+  }
+}
+
+async function fetchPlaceCandidates(query) {
+  if (!runtimeConfig.supabaseUrl || !runtimeConfig.supabaseAnonKey) {
+    throw new Error("Supabase config is missing");
+  }
+
+  const endpoint = `${runtimeConfig.supabaseUrl.replace(/\/$/, "")}/functions/v1/naver-place-search`;
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      apikey: runtimeConfig.supabaseAnonKey,
+      Authorization: `Bearer ${runtimeConfig.supabaseAnonKey}`,
+    },
+    body: JSON.stringify({ query }),
+  });
+
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(payload.error || "Place search request failed");
+  }
+
+  return Array.isArray(payload.items) ? payload.items.map(normalizePlaceCandidate).filter((place) => place.name) : [];
+}
+
+function normalizePlaceCandidate(item) {
+  return {
+    name: stripHtml(item.name || item.title || ""),
+    category: stripHtml(item.category || ""),
+    address: stripHtml(item.address || ""),
+    roadAddress: stripHtml(item.roadAddress || ""),
+    link: String(item.link || ""),
+    lat: toOptionalNumber(item.lat),
+    lng: toOptionalNumber(item.lng),
+    mapx: toOptionalNumber(item.mapx),
+    mapy: toOptionalNumber(item.mapy),
+  };
+}
+
+function renderPlaceResults(places) {
+  els.placeResultList.innerHTML = "";
+
+  if (!places.length) {
+    renderPlaceMessage("검색 결과가 없습니다");
+    return;
+  }
+
+  const fragment = document.createDocumentFragment();
+  places.forEach((place) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "place-result";
+    button.addEventListener("click", () => selectPlaceCandidate(place));
+
+    const name = document.createElement("strong");
+    name.textContent = place.name;
+
+    const meta = document.createElement("span");
+    meta.textContent = [place.category, place.roadAddress || place.address].filter(Boolean).join(" · ");
+
+    button.append(name, meta);
+    fragment.append(button);
+  });
+
+  els.placeResultList.append(fragment);
+  els.placeResultList.classList.remove("hidden");
+}
+
+function renderPlaceMessage(message) {
+  els.placeResultList.innerHTML = "";
+  const item = document.createElement("div");
+  item.className = "place-result-message";
+  item.textContent = message;
+  els.placeResultList.append(item);
+  els.placeResultList.classList.remove("hidden");
+}
+
+function clearPlaceResults() {
+  els.placeResultList.innerHTML = "";
+  els.placeResultList.classList.add("hidden");
+}
+
+function selectPlaceCandidate(place) {
+  const coord = resolvePlaceCoordinate(place);
+  els.nameInput.value = place.name;
+  els.areaInput.value = place.roadAddress || place.address || "";
+  setCategoryFromPlace(place.category);
+
+  if (coord) {
+    fillCoordinateInputs(coord);
+    state.lastMapCoord = coord;
+    state.map?.panTo(coord);
+  }
+
+  clearPlaceResults();
+}
+
+function resolvePlaceCoordinate(place) {
+  if (isValidCoordinate(place)) {
+    return { lat: place.lat, lng: place.lng };
+  }
+
+  const scaledLng = place.mapx / 10000000;
+  const scaledLat = place.mapy / 10000000;
+  if (isValidCoordinate({ lat: scaledLat, lng: scaledLng })) {
+    return { lat: scaledLat, lng: scaledLng };
+  }
+
+  if (window.naver?.maps?.TransCoord?.fromTM128ToLatLng && Number.isFinite(place.mapx) && Number.isFinite(place.mapy)) {
+    const convertedCoord = normaliseNaverCoord(
+      window.naver.maps.TransCoord.fromTM128ToLatLng(new window.naver.maps.Point(place.mapx, place.mapy))
+    );
+    return isValidCoordinate(convertedCoord) ? convertedCoord : null;
+  }
+
+  return null;
+}
+
+function isValidCoordinate(coord) {
+  return (
+    Number.isFinite(coord.lat) &&
+    Number.isFinite(coord.lng) &&
+    Math.abs(coord.lat) <= 90 &&
+    Math.abs(coord.lng) <= 180
+  );
+}
+
+function toOptionalNumber(value) {
+  if (value === null || value === undefined || value === "") return NaN;
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue) ? numberValue : NaN;
+}
+
+function setCategoryFromPlace(category) {
+  const nextCategory = inferCategoryFromPlace(category);
+  if (!nextCategory) return;
+  const option = [...els.categoryInput.options].find((item) => item.value === nextCategory || item.textContent === nextCategory);
+  if (option) {
+    els.categoryInput.value = option.value;
+  }
+}
+
+function inferCategoryFromPlace(category) {
+  const text = String(category || "");
+  if (text.includes("카페") || text.includes("디저트") || text.includes("베이커리")) return "카페";
+  if (text.includes("일식") || text.includes("초밥") || text.includes("라멘") || text.includes("돈가스")) return "일식";
+  if (text.includes("중식") || text.includes("중국")) return "중식";
+  if (text.includes("양식") || text.includes("이탈리아") || text.includes("프랑스") || text.includes("스테이크")) return "양식";
+  if (text.includes("분식") || text.includes("국수") || text.includes("김밥")) return "분식";
+  if (text.includes("바") || text.includes("술집") || text.includes("주점") || text.includes("와인")) return "바";
+  if (text.includes("한식") || text.includes("고기") || text.includes("국밥") || text.includes("냉면")) return "한식";
+  return "기타";
+}
+
 function addMenuFromDraft({ refocus = true } = {}) {
   const menu = els.menuDraftInput.value.trim();
   if (!menu) {
@@ -651,6 +843,12 @@ function renderSelectedCard(visibleRestaurants) {
   }
 
   const naverLink = `https://map.naver.com/p/search/${encodeURIComponent(restaurant.name)}`;
+  const editableActions = restaurant.canEdit
+    ? `
+          <button class="secondary-button" type="button" data-action="edit">수정</button>
+          <button class="secondary-button danger-button" type="button" data-action="delete">삭제</button>
+        `
+    : "";
   els.selectedCard.innerHTML = `
     <div class="card-layout">
       <div class="card-main">
@@ -664,17 +862,16 @@ function renderSelectedCard(visibleRestaurants) {
         ${ratingBadge(restaurant.rating)}
         <div class="card-actions">
           <a class="link-button" href="${naverLink}" target="_blank" rel="noreferrer">네이버</a>
-          <button class="secondary-button" type="button" data-action="edit">수정</button>
-          <button class="secondary-button danger-button" type="button" data-action="delete">삭제</button>
+          ${editableActions}
         </div>
       </div>
     </div>
   `;
 
-  els.selectedCard.querySelector('[data-action="edit"]').addEventListener("click", () => {
+  els.selectedCard.querySelector('[data-action="edit"]')?.addEventListener("click", () => {
     openSpotDialog(restaurant);
   });
-  els.selectedCard.querySelector('[data-action="delete"]').addEventListener("click", () => {
+  els.selectedCard.querySelector('[data-action="delete"]')?.addEventListener("click", () => {
     deleteRestaurant(restaurant.id);
   });
   els.selectedCard.classList.remove("hidden");
@@ -693,12 +890,14 @@ function openSpotDialog(restaurant = null) {
   closeFloatingPanels();
   closeSelectedRestaurant();
   els.spotForm.reset();
+  clearPlaceResults();
   document.getElementById("spotId").value = restaurant?.id ?? "";
   els.spotDialogTitle.textContent = restaurant ? "맛집 수정" : "맛집 추가";
 
   if (restaurant) {
-    document.getElementById("nameInput").value = restaurant.name;
-    document.getElementById("categoryInput").value = restaurant.category;
+    els.nameInput.value = restaurant.name;
+    els.categoryInput.value = restaurant.category;
+    els.areaInput.value = restaurant.area;
     renderMenuInputs(restaurant.menus);
     fillCoordinateInputs({ lat: restaurant.lat, lng: restaurant.lng });
     document.getElementById("memoInput").value = restaurant.memo;
@@ -708,15 +907,16 @@ function openSpotDialog(restaurant = null) {
       input.checked = restaurant.deliveryApps.includes(input.value);
     });
   } else {
+    els.areaInput.value = "";
     renderMenuInputs([]);
     fillCoordinateInputs(state.map?.getCenter() ?? state.lastMapCoord);
   }
 
   openAnimatedSpotDialog();
-  document.getElementById("nameInput").focus();
+  els.nameInput.focus();
 }
 
-function handleSpotSubmit(event) {
+async function handleSpotSubmit(event) {
   event.preventDefault();
   addMenuFromDraft({ refocus: false });
   const formData = new FormData(els.spotForm);
@@ -735,7 +935,7 @@ function handleSpotSubmit(event) {
     name: String(formData.get("name") || "").trim(),
     category: String(formData.get("category") || "기타").trim(),
     rating: clampRating(Number(formData.get("rating"))),
-    area: existingRestaurant?.area ?? "",
+    area: String(formData.get("area") || existingRestaurant?.area || "").trim(),
     lat,
     lng,
     menus: normalizeMenuValues(formData.getAll("menus")),
@@ -744,35 +944,50 @@ function handleSpotSubmit(event) {
   };
 
   if (!nextRestaurant.name) {
-    document.getElementById("nameInput").focus();
+    els.nameInput.focus();
     return;
   }
 
-  const existingIndex = state.restaurants.findIndex((restaurant) => restaurant.id === nextRestaurant.id);
-  if (existingIndex >= 0) {
-    state.restaurants.splice(existingIndex, 1, nextRestaurant);
-  } else {
-    state.restaurants.unshift(nextRestaurant);
-  }
+  const submitButton = els.spotForm.querySelector('[type="submit"]');
+  submitButton.disabled = true;
 
-  saveRestaurants();
-  state.selectedId = nextRestaurant.id;
-  closeSpotDialog();
-  render();
-  state.map?.panTo({ lat: nextRestaurant.lat, lng: nextRestaurant.lng });
+  try {
+    const savedRestaurant = await saveRestaurant(nextRestaurant, { isNew: !existingRestaurant });
+    const existingIndex = state.restaurants.findIndex((restaurant) => restaurant.id === savedRestaurant.id);
+    if (existingIndex >= 0) {
+      state.restaurants.splice(existingIndex, 1, savedRestaurant);
+    } else {
+      state.restaurants.unshift(savedRestaurant);
+    }
+
+    state.selectedId = savedRestaurant.id;
+    closeSpotDialog();
+    render();
+    state.map?.panTo({ lat: savedRestaurant.lat, lng: savedRestaurant.lng });
+  } catch (error) {
+    console.warn("restaurant save failed", error);
+    window.alert("맛집을 저장하지 못했습니다. Supabase 설정과 권한을 확인해주세요.");
+  } finally {
+    submitButton.disabled = false;
+  }
 }
 
-function deleteRestaurant(id) {
+async function deleteRestaurant(id) {
   const restaurant = state.restaurants.find((item) => item.id === id);
   if (!restaurant) return;
   if (!window.confirm(`${restaurant.name}을 삭제할까요?`)) return;
 
-  state.restaurants = state.restaurants.filter((item) => item.id !== id);
-  if (state.selectedId === id) {
-    state.selectedId = null;
+  try {
+    await removeRestaurant(id);
+    state.restaurants = state.restaurants.filter((item) => item.id !== id);
+    if (state.selectedId === id) {
+      state.selectedId = null;
+    }
+    render();
+  } catch (error) {
+    console.warn("restaurant delete failed", error);
+    window.alert("맛집을 삭제하지 못했습니다. Supabase 권한을 확인해주세요.");
   }
-  saveRestaurants();
-  render();
 }
 
 function fillCoordinateInputs(coord) {
@@ -856,20 +1071,214 @@ function setProviderBadge() {
   // Map status is intentionally not rendered in the UI.
 }
 
-function loadRestaurants() {
+async function initializeDataStore() {
+  const localStore = new LocalRestaurantStore();
+
+  if (!runtimeConfig.supabaseUrl || !runtimeConfig.supabaseAnonKey) {
+    state.store = localStore;
+    state.restaurants = localStore.list();
+    return;
+  }
+
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return structuredClone(seedRestaurants);
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return structuredClone(seedRestaurants);
-    return parsed.map(normalizeRestaurant).filter(Boolean);
-  } catch {
-    return structuredClone(seedRestaurants);
+    const supabaseStore = new SupabaseRestaurantStore(runtimeConfig);
+    await supabaseStore.init();
+    state.store = supabaseStore;
+    const remoteRestaurants = await supabaseStore.list();
+    state.restaurants =
+      remoteRestaurants.length === 0 && hasLocalRestaurantData()
+        ? await migrateLocalRestaurantsToSupabase(localStore, supabaseStore)
+        : remoteRestaurants;
+  } catch (error) {
+    console.warn("supabase init failed; falling back to local storage", error);
+    state.store = localStore;
+    state.restaurants = localStore.list();
   }
 }
 
-function saveRestaurants() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state.restaurants));
+function saveRestaurant(restaurant, options) {
+  return state.store.save(restaurant, options);
+}
+
+function removeRestaurant(id) {
+  return state.store.remove(id);
+}
+
+async function migrateLocalRestaurantsToSupabase(localStore, supabaseStore) {
+  const migratedRestaurants = [];
+  for (const restaurant of localStore.list()) {
+    migratedRestaurants.push(await supabaseStore.save(restaurant, { isNew: true }));
+  }
+  return migratedRestaurants;
+}
+
+class LocalRestaurantStore {
+  list() {
+    return loadLocalRestaurants();
+  }
+
+  async save(restaurant) {
+    const nextRestaurant = normalizeRestaurant({ ...restaurant, canEdit: true });
+    const restaurants = loadLocalRestaurants();
+    const existingIndex = restaurants.findIndex((item) => item.id === nextRestaurant.id);
+    if (existingIndex >= 0) {
+      restaurants.splice(existingIndex, 1, nextRestaurant);
+    } else {
+      restaurants.unshift(nextRestaurant);
+    }
+    saveLocalRestaurants(restaurants);
+    return nextRestaurant;
+  }
+
+  async remove(id) {
+    saveLocalRestaurants(loadLocalRestaurants().filter((restaurant) => restaurant.id !== id));
+  }
+}
+
+class SupabaseRestaurantStore {
+  constructor(config) {
+    this.url = config.supabaseUrl;
+    this.anonKey = config.supabaseAnonKey;
+    this.client = null;
+    this.userId = null;
+  }
+
+  async init() {
+    const { createClient } = await import(SUPABASE_SDK_URL);
+    this.client = createClient(this.url, this.anonKey, {
+      auth: {
+        autoRefreshToken: true,
+        detectSessionInUrl: false,
+        persistSession: true,
+        storageKey: "ccatalog.supabase.auth",
+      },
+    });
+
+    const { data: sessionData, error: sessionError } = await this.client.auth.getSession();
+    if (sessionError) throw sessionError;
+
+    let session = sessionData.session;
+    if (!session) {
+      const { data, error } = await this.client.auth.signInAnonymously();
+      if (error) throw error;
+      session = data.session;
+    }
+
+    this.userId = session?.user?.id ?? null;
+    if (!this.userId) {
+      throw new Error("Supabase anonymous session was not created");
+    }
+  }
+
+  async list() {
+    const { data, error } = await this.client
+      .from(SUPABASE_TABLE)
+      .select(RESTAURANT_SELECT_COLUMNS)
+      .order("rating", { ascending: false })
+      .order("name", { ascending: true });
+
+    if (error) throw error;
+    return (data ?? []).map((row) => rowToRestaurant(row, this.userId)).filter(Boolean);
+  }
+
+  async save(restaurant, { isNew } = {}) {
+    const payload = restaurantToRow(restaurant, { includeId: isNew });
+    let query;
+
+    if (isNew) {
+      query = this.client.from(SUPABASE_TABLE).insert({ ...payload, owner_id: this.userId });
+    } else {
+      query = this.client.from(SUPABASE_TABLE).update(payload).eq("id", restaurant.id);
+    }
+
+    const { data, error } = await query.select(RESTAURANT_SELECT_COLUMNS).single();
+    if (error) throw error;
+    return rowToRestaurant(data, this.userId);
+  }
+
+  async remove(id) {
+    const { error } = await this.client.from(SUPABASE_TABLE).delete().eq("id", id);
+    if (error) throw error;
+  }
+}
+
+const RESTAURANT_SELECT_COLUMNS = [
+  "id",
+  "owner_id",
+  "name",
+  "category",
+  "rating",
+  "area",
+  "lat",
+  "lng",
+  "menus",
+  "delivery_apps",
+  "memo",
+  "created_at",
+  "updated_at",
+].join(",");
+
+function rowToRestaurant(row, userId) {
+  return normalizeRestaurant({
+    id: row.id,
+    name: row.name,
+    category: row.category,
+    rating: row.rating,
+    area: row.area,
+    lat: row.lat,
+    lng: row.lng,
+    menus: row.menus,
+    deliveryApps: row.delivery_apps,
+    memo: row.memo,
+    canEdit: row.owner_id === userId,
+  });
+}
+
+function restaurantToRow(restaurant, { includeId = true } = {}) {
+  const row = {
+    name: restaurant.name,
+    category: restaurant.category,
+    rating: restaurant.rating,
+    area: restaurant.area,
+    lat: restaurant.lat,
+    lng: restaurant.lng,
+    menus: normalizeMenuValues(restaurant.menus),
+    delivery_apps: normalizeDeliveryApps(restaurant.deliveryApps),
+    memo: restaurant.memo,
+  };
+
+  if (includeId && isUuid(restaurant.id)) {
+    row.id = restaurant.id;
+  }
+
+  return row;
+}
+
+function hasLocalRestaurantData() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return false;
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) && parsed.length > 0;
+  } catch {
+    return false;
+  }
+}
+
+function loadLocalRestaurants() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return structuredClone(seedRestaurants).map(normalizeRestaurant).filter(Boolean);
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return structuredClone(seedRestaurants).map(normalizeRestaurant).filter(Boolean);
+    return parsed.map(normalizeRestaurant).filter(Boolean);
+  } catch {
+    return structuredClone(seedRestaurants).map(normalizeRestaurant).filter(Boolean);
+  }
+}
+
+function saveLocalRestaurants(restaurants) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(restaurants));
 }
 
 function normalizeRestaurant(item) {
@@ -888,6 +1297,7 @@ function normalizeRestaurant(item) {
     menus: Array.isArray(item.menus) ? item.menus.map(String).filter(Boolean).slice(0, 6) : [],
     deliveryApps: normalizeDeliveryApps(item.deliveryApps),
     memo: String(item.memo || ""),
+    canEdit: item.canEdit !== false,
   };
 }
 
@@ -902,6 +1312,10 @@ function createId() {
     return window.crypto.randomUUID();
   }
   return `spot-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function isUuid(value) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value));
 }
 
 function clampRating(value) {
@@ -920,6 +1334,12 @@ function escapeHtml(value) {
     };
     return entities[char];
   });
+}
+
+function stripHtml(value) {
+  const template = document.createElement("template");
+  template.innerHTML = String(value);
+  return (template.content.textContent || "").trim();
 }
 
 function loadScript(src, checkReady, timeoutMs = 7000, callbackName = "") {
@@ -1103,7 +1523,7 @@ class NaverMapAdapter {
   async loadNaverScript() {
     const previousAuthFailure = window.navermap_authFailure;
     const callbackName = `ccatalogNaverReady${Date.now()}`;
-    const src = `https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=${encodeURIComponent(this.key)}&callback=${callbackName}`;
+    const src = `https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=${encodeURIComponent(this.key)}&submodules=geocoder&callback=${callbackName}`;
     try {
       await Promise.race([
         loadScript(src, () => Boolean(window.naver?.maps?.Map && window.naver.maps.LatLng), 8000, callbackName),

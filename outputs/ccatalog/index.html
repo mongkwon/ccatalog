@@ -125,10 +125,18 @@
         </div>
 
         <div class="form-grid">
-          <label class="field span-2">
-            <span>이름</span>
-            <input id="nameInput" name="name" type="text" required maxlength="40" />
-          </label>
+          <div class="field span-2 place-field">
+            <label for="nameInput">이름</label>
+            <div class="place-entry">
+              <input id="nameInput" name="name" type="text" required maxlength="40" autocomplete="off" />
+              <button id="placeSearchButton" class="place-search-button" type="button" aria-label="장소 검색">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="m21 21-5-5m2-5a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z" />
+                </svg>
+              </button>
+            </div>
+            <div id="placeResultList" class="place-result-list hidden" aria-live="polite"></div>
+          </div>
 
           <label class="field span-2">
             <span>분류</span>
@@ -193,6 +201,7 @@
 
           <input id="latInput" name="lat" type="hidden" />
           <input id="lngInput" name="lng" type="hidden" />
+          <input id="areaInput" name="area" type="hidden" />
 
           <label class="field span-2">
             <span>메모</span>

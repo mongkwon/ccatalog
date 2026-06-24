@@ -1,0 +1,4 @@
+project_id = "ccatalog"
+
+[functions.naver-place-search]
+verify_jwt = true
