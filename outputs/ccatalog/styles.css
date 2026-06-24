@@ -16,6 +16,11 @@
   --cyan: #247d9a;
   --rose: #be5a73;
   --danger: #c84634;
+  --dock-bottom: 16px;
+  --dock-button-height: 48px;
+  --dock-height: 62px;
+  --floating-gap: 18px;
+  --floating-bottom: calc(var(--dock-bottom) + var(--dock-height) + var(--floating-gap));
   color-scheme: light;
   font-family:
     "Pretendard",
@@ -323,7 +328,7 @@ button {
   position: absolute;
   z-index: 18;
   left: 50%;
-  bottom: 96px;
+  bottom: var(--floating-bottom);
   display: grid;
   width: min(860px, calc(100vw - 32px));
   max-height: 220px;
@@ -355,7 +360,7 @@ button {
   position: absolute;
   z-index: 19;
   left: 50%;
-  bottom: 96px;
+  bottom: var(--floating-bottom);
   width: min(520px, calc(100vw - 32px));
   padding: 10px;
   border-radius: 30px;
@@ -523,8 +528,7 @@ button {
     0 0 0 1px rgba(18, 159, 189, 0.26);
 }
 
-.item-head,
-.card-head {
+.item-head {
   display: flex;
   min-width: 0;
   align-items: flex-start;
@@ -548,9 +552,33 @@ button {
 }
 
 .selected-card h2 {
-  max-width: 280px;
+  max-width: none;
   font-size: 22px;
   line-height: 1.15;
+}
+
+.card-layout {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) 86px;
+  gap: 14px;
+  align-items: start;
+}
+
+.card-main {
+  min-width: 0;
+}
+
+.card-side {
+  display: grid;
+  min-width: 0;
+  gap: 7px;
+}
+
+.card-side .rating-badge {
+  width: 100%;
+  min-height: 28px;
+  padding: 0 6px;
 }
 
 .item-sub,
@@ -658,7 +686,7 @@ button {
   position: absolute;
   z-index: 17;
   left: 50%;
-  bottom: 108px;
+  bottom: var(--floating-bottom);
   width: min(500px, calc(100vw - 32px));
   min-width: 0;
   transform: translateX(-50%);
@@ -667,11 +695,11 @@ button {
 }
 
 .is-list-open .selected-card {
-  bottom: 332px;
+  bottom: calc(var(--floating-bottom) + 236px);
 }
 
 .is-search-open .selected-card {
-  bottom: 176px;
+  bottom: calc(var(--floating-bottom) + 80px);
 }
 
 .selected-card p {
@@ -687,10 +715,17 @@ button {
 }
 
 .card-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 14px;
+  display: grid;
+  gap: 6px;
+  margin-top: 0;
+}
+
+.selected-card .link-button,
+.selected-card .secondary-button {
+  width: 100%;
+  min-height: 30px;
+  padding: 0 8px;
+  font-size: 12px;
 }
 
 .link-button,
@@ -747,7 +782,7 @@ button {
   position: absolute;
   z-index: 30;
   left: 50%;
-  bottom: 16px;
+  bottom: var(--dock-bottom);
   display: grid;
   grid-template-columns: 74px 74px 86px;
   gap: 7px;
@@ -768,7 +803,7 @@ button {
   position: relative;
   display: grid;
   width: 100%;
-  height: 48px;
+  height: var(--dock-button-height);
   place-items: center;
   border: 1px solid rgba(255, 255, 255, 0.84);
   border-radius: 999px;
@@ -910,10 +945,10 @@ button {
   position: fixed;
   z-index: 60;
   top: auto;
-  bottom: 104px;
+  bottom: var(--floating-bottom);
   left: 50%;
   width: min(840px, calc(100vw - 32px));
-  max-height: calc(100dvh - 126px);
+  max-height: calc(100dvh - var(--floating-bottom) - 22px);
   overflow: visible;
   margin: 0;
   padding: 0;
@@ -1147,11 +1182,18 @@ button {
   }
 
   .is-list-open .selected-card {
-    bottom: 350px;
+    bottom: calc(var(--floating-bottom) + 254px);
   }
 }
 
 @media (max-width: 680px) {
+  :root {
+    --dock-bottom: 12px;
+    --dock-button-height: 46px;
+    --dock-height: 60px;
+    --floating-gap: 16px;
+  }
+
   .app-shell,
   .map-stage {
     min-height: 0;
@@ -1184,7 +1226,7 @@ button {
 
   .restaurant-panel {
     right: 12px;
-    bottom: 92px;
+    bottom: var(--floating-bottom);
     left: 12px;
     width: auto;
     max-height: 250px;
@@ -1205,7 +1247,7 @@ button {
 
   .search-panel {
     right: 12px;
-    bottom: 92px;
+    bottom: var(--floating-bottom);
     left: 12px;
     width: auto;
     transform: translateY(10px);
@@ -1216,14 +1258,13 @@ button {
   }
 
   .bottom-dock {
-    bottom: 12px;
     grid-template-columns: 68px 68px 78px;
     padding: 7px;
   }
 
   .dock-button {
     width: 100%;
-    height: 46px;
+    height: var(--dock-button-height);
   }
 
   .search-row {
@@ -1280,7 +1321,7 @@ button {
 
   .selected-card {
     right: 12px;
-    bottom: 88px;
+    bottom: var(--floating-bottom);
     left: 12px;
     width: auto;
     transform: none;
@@ -1289,16 +1330,16 @@ button {
   }
 
   .selected-card h2 {
-    max-width: 220px;
+    max-width: none;
     font-size: 20px;
   }
 
   .is-search-open .selected-card {
-    bottom: 156px;
+    bottom: calc(var(--floating-bottom) + 68px);
   }
 
   .is-list-open .selected-card {
-    bottom: 356px;
+    bottom: calc(var(--floating-bottom) + 268px);
   }
 
   .form-grid {
@@ -1316,11 +1357,11 @@ button {
 
   .modal {
     top: auto;
-    bottom: 88px;
+    bottom: var(--floating-bottom);
     right: 12px;
     left: 12px;
     width: auto;
-    max-height: calc(100dvh - 108px);
+    max-height: calc(100dvh - var(--floating-bottom) - 20px);
     transform: none;
   }
 
@@ -1339,24 +1380,25 @@ button {
 }
 
 @media (max-height: 720px) {
-  .bottom-dock {
-    bottom: 12px;
+  :root {
+    --dock-bottom: 12px;
+    --floating-gap: 20px;
   }
 
   .restaurant-panel {
-    bottom: 96px;
+    bottom: var(--floating-bottom);
     max-height: 142px;
     gap: 8px 10px;
     padding: 10px;
   }
 
   .search-panel {
-    bottom: 96px;
+    bottom: var(--floating-bottom);
   }
 
   .modal {
-    bottom: 94px;
-    max-height: calc(100dvh - 112px);
+    bottom: var(--floating-bottom);
+    max-height: calc(100dvh - var(--floating-bottom) - 18px);
   }
 
   .modal-card {
@@ -1427,22 +1469,22 @@ button {
   }
 
   .selected-card {
-    bottom: 92px;
+    bottom: var(--floating-bottom);
     width: min(660px, calc(100vw - 24px));
     padding: 12px;
     border-radius: 24px;
   }
 
   .is-search-open .selected-card {
-    bottom: 154px;
+    bottom: calc(var(--floating-bottom) + 62px);
   }
 
   .is-list-open .selected-card {
-    bottom: 252px;
+    bottom: calc(var(--floating-bottom) + 158px);
   }
 
   .selected-card h2 {
-    max-width: 360px;
+    max-width: none;
     font-size: 19px;
   }
 
@@ -1452,17 +1494,9 @@ button {
     display: none;
   }
 
-  .selected-card .card-actions {
-    margin-top: 10px;
-  }
-
-  .selected-card .danger-button {
-    display: none;
-  }
-
   .selected-card .link-button,
   .selected-card .secondary-button {
-    min-height: 32px;
+    min-height: 28px;
     padding: 0 11px;
     font-size: 12px;
   }
@@ -1471,7 +1505,7 @@ button {
 @media (max-width: 680px) and (max-height: 760px) {
   .selected-card {
     right: 12px;
-    bottom: 88px;
+    bottom: var(--floating-bottom);
     left: 12px;
     width: auto;
     transform: none;
@@ -1480,7 +1514,7 @@ button {
   }
 
   .selected-card h2 {
-    max-width: 210px;
+    max-width: none;
     font-size: 18px;
   }
 
@@ -1489,11 +1523,11 @@ button {
   }
 
   .is-search-open .selected-card {
-    bottom: 154px;
+    bottom: calc(var(--floating-bottom) + 62px);
   }
 
   .is-list-open .selected-card {
-    bottom: 254px;
+    bottom: calc(var(--floating-bottom) + 162px);
   }
 }
 

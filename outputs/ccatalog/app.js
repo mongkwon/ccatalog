@@ -159,11 +159,13 @@ function bindEvents() {
   });
 
   els.panelToggle.addEventListener("click", () => {
+    closeSpotDialog();
     setSearchPanelOpen(false);
     setRestaurantPanelOpen(!els.restaurantPanel.classList.contains("is-open"));
   });
 
   els.searchToggle.addEventListener("click", () => {
+    closeSpotDialog();
     setRestaurantPanelOpen(false);
     const nextOpen = !els.searchPanel.classList.contains("is-open");
     setSearchPanelOpen(nextOpen);
@@ -173,8 +175,12 @@ function bindEvents() {
   });
 
   els.addButton.addEventListener("click", () => {
+    const shouldOpen = !els.spotDialog.open;
     closeFloatingPanels();
-    openSpotDialog();
+    closeSpotDialog();
+    if (shouldOpen) {
+      openSpotDialog();
+    }
   });
 
   document.addEventListener("keydown", (event) => {
@@ -227,6 +233,12 @@ function setSearchPanelOpen(isOpen) {
 function closeFloatingPanels() {
   setRestaurantPanelOpen(false);
   setSearchPanelOpen(false);
+}
+
+function closeSpotDialog() {
+  if (els.spotDialog.open) {
+    els.spotDialog.close();
+  }
 }
 
 async function initializeMap() {
@@ -345,20 +357,22 @@ function renderSelectedCard(visibleRestaurants) {
 
   const naverLink = `https://map.naver.com/p/search/${encodeURIComponent(restaurant.name)}`;
   els.selectedCard.innerHTML = `
-    <div class="card-head">
-      <div>
+    <div class="card-layout">
+      <div class="card-main">
         <h2>${escapeHtml(restaurant.name)}</h2>
         <p class="card-sub">${escapeHtml([restaurant.category, restaurant.area].filter(Boolean).join(" · "))}</p>
+        ${menuChips(restaurant.menus)}
+        ${deliveryChips(restaurant.deliveryApps)}
+        ${restaurant.memo ? `<p class="memo">${escapeHtml(restaurant.memo)}</p>` : ""}
       </div>
-      ${ratingBadge(restaurant.rating)}
-    </div>
-    ${menuChips(restaurant.menus)}
-    ${deliveryChips(restaurant.deliveryApps)}
-    ${restaurant.memo ? `<p class="memo">${escapeHtml(restaurant.memo)}</p>` : ""}
-    <div class="card-actions">
-      <a class="link-button" href="${naverLink}" target="_blank" rel="noreferrer">네이버</a>
-      <button class="secondary-button" type="button" data-action="edit">수정</button>
-      <button class="secondary-button danger-button" type="button" data-action="delete">삭제</button>
+      <div class="card-side">
+        ${ratingBadge(restaurant.rating)}
+        <div class="card-actions">
+          <a class="link-button" href="${naverLink}" target="_blank" rel="noreferrer">네이버</a>
+          <button class="secondary-button" type="button" data-action="edit">수정</button>
+          <button class="secondary-button danger-button" type="button" data-action="delete">삭제</button>
+        </div>
+      </div>
     </div>
   `;
 
@@ -381,6 +395,7 @@ function selectRestaurant(id) {
 }
 
 function openSpotDialog(restaurant = null) {
+  closeFloatingPanels();
   els.spotForm.reset();
   document.getElementById("spotId").value = restaurant?.id ?? "";
   els.spotDialogTitle.textContent = restaurant ? "맛집 수정" : "맛집 추가";
