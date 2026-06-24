@@ -814,16 +814,16 @@ button {
 .modal {
   position: fixed;
   z-index: 60;
-  top: 86px;
-  right: 18px;
-  left: auto;
-  width: min(540px, calc(100vw - 28px));
-  max-height: calc(100dvh - 110px);
+  top: 50%;
+  left: 50%;
+  width: min(560px, calc(100vw - 28px));
+  max-height: min(720px, calc(100dvh - 72px));
   overflow: auto;
   margin: 0;
   padding: 0;
   border: 0;
   background: transparent;
+  transform: translate(-50%, -50%);
 }
 
 .modal::backdrop {
@@ -1191,16 +1191,111 @@ button {
   }
 
   .modal {
-    top: 68px;
+    top: 50%;
     right: 12px;
     left: 12px;
     width: auto;
-    max-height: calc(100dvh - 92px);
+    max-height: calc(100dvh - 32px);
+    transform: translateY(-50%);
   }
 
   .modal-card {
     padding: 16px;
     border-radius: 26px;
+  }
+}
+
+@media (max-height: 720px) {
+  .restaurant-panel {
+    bottom: 12px;
+    max-height: 142px;
+    gap: 8px 10px;
+    padding: 10px;
+  }
+
+  .search-row,
+  .filter-chip {
+    height: 38px;
+  }
+
+  .restaurant-item,
+  .empty-state {
+    width: 190px;
+    min-width: 190px;
+    height: 70px;
+    padding: 9px 11px;
+    border-radius: 20px;
+  }
+
+  .restaurant-item h3 {
+    font-size: 14px;
+  }
+
+  .item-sub,
+  .item-menu-preview {
+    font-size: 10px;
+  }
+
+  .panel-meta strong {
+    font-size: 18px;
+  }
+
+  .panel-meta span {
+    display: none;
+  }
+
+  .selected-card {
+    bottom: 158px;
+    width: min(660px, calc(100vw - 24px));
+    padding: 12px;
+    border-radius: 24px;
+  }
+
+  .selected-card h2 {
+    max-width: 360px;
+    font-size: 19px;
+  }
+
+  .selected-card .menu-row,
+  .selected-card .delivery-row,
+  .selected-card .memo {
+    display: none;
+  }
+
+  .selected-card .card-actions {
+    margin-top: 10px;
+  }
+
+  .selected-card .danger-button {
+    display: none;
+  }
+
+  .selected-card .link-button,
+  .selected-card .secondary-button {
+    min-height: 32px;
+    padding: 0 11px;
+    font-size: 12px;
+  }
+}
+
+@media (max-width: 680px) and (max-height: 760px) {
+  .selected-card {
+    right: 12px;
+    bottom: 168px;
+    left: 12px;
+    width: auto;
+    transform: none;
+    padding: 11px 12px;
+    border-radius: 23px;
+  }
+
+  .selected-card h2 {
+    max-width: 210px;
+    font-size: 18px;
+  }
+
+  .selected-card .rating-badge {
+    min-height: 24px;
   }
 }
 
