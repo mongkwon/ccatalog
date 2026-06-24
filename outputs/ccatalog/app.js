@@ -120,12 +120,19 @@ const dockDragState = {
   startX: 0,
   startY: 0,
   isDragging: false,
+  pressIndex: -1,
+  previewIndex: -1,
   suppressClick: false,
 };
 let spotDialogOpenFrame = null;
 let dockIndicatorUpdateTimer = null;
 
 document.addEventListener("DOMContentLoaded", init);
+document.addEventListener("gesturestart", preventPageZoom, { passive: false });
+document.addEventListener("gesturechange", preventPageZoom, { passive: false });
+document.addEventListener("gestureend", preventPageZoom, { passive: false });
+document.addEventListener("wheel", preventPageZoom, { passive: false });
+document.addEventListener("keydown", preventPageZoomShortcut);
 
 async function init() {
   cacheElements();
@@ -429,10 +436,16 @@ function handleDockClickCapture(event) {
 function handleDockPointerDown(event) {
   if (isSearchPanelOpen()) return;
   if (event.pointerType === "mouse" && event.button !== 0) return;
+  const pressIndex = getDockIndexFromEvent(event);
+  if (pressIndex < 0) return;
   dockDragState.pointerId = event.pointerId;
   dockDragState.startX = event.clientX;
   dockDragState.startY = event.clientY;
   dockDragState.isDragging = false;
+  dockDragState.pressIndex = pressIndex;
+  setDockPreviewIndex(pressIndex);
+  setDockIndicatorToIndex(pressIndex);
+  els.bottomDock.classList.add("is-pressing");
   els.bottomDock.setPointerCapture?.(event.pointerId);
 }
 
@@ -462,18 +475,19 @@ function handleDockPointerUp(event) {
   if (isSearchPanelOpen()) return;
   if (event.pointerId !== dockDragState.pointerId) return;
   const targetIndex = getNearestDockIndex(event.clientX);
+  const finalIndex = targetIndex >= 0 ? targetIndex : dockDragState.pressIndex;
   finishDockDrag(event);
 
-  if (targetIndex < 0) return;
+  if (finalIndex < 0) return;
   event.preventDefault();
   dockDragState.suppressClick = true;
   window.setTimeout(() => {
     dockDragState.suppressClick = false;
   }, 120);
 
-  const targetButton = getDockButtons()[targetIndex];
+  const targetButton = getDockButtons()[finalIndex];
   if (!targetButton?.dataset.filter) return;
-  setDockIndicatorToIndex(targetIndex);
+  setDockIndicatorToIndex(finalIndex);
   setFilter(targetButton.dataset.filter);
 }
 
@@ -489,13 +503,28 @@ function finishDockDrag(event) {
   }
   dockDragState.pointerId = null;
   dockDragState.isDragging = false;
+  dockDragState.pressIndex = -1;
+  setDockPreviewIndex(-1);
+  els.bottomDock.classList.remove("is-pressing");
   els.bottomDock.classList.remove("is-dragging");
+}
+
+function preventPageZoom(event) {
+  if (event.type === "wheel" && !event.ctrlKey) return;
+  event.preventDefault();
+}
+
+function preventPageZoomShortcut(event) {
+  if (!event.ctrlKey && !event.metaKey) return;
+  if (!["+", "-", "=", "_", "0"].includes(event.key)) return;
+  event.preventDefault();
 }
 
 function moveDockIndicatorToPointer(clientX) {
   const buttons = getDockButtons();
   const nearestIndex = getNearestDockIndex(clientX);
   if (nearestIndex < 0) return;
+  setDockPreviewIndex(nearestIndex);
 
   const dockRect = els.bottomDock.getBoundingClientRect();
   const button = buttons[nearestIndex];
@@ -508,6 +537,22 @@ function moveDockIndicatorToPointer(clientX) {
   els.bottomDock.style.setProperty("--dock-indicator-x", `${nextX}px`);
   els.bottomDock.style.setProperty("--dock-indicator-width", `${width}px`);
   els.bottomDock.style.setProperty("--dock-indicator-opacity", "1");
+}
+
+function setDockPreviewIndex(index) {
+  if (dockDragState.previewIndex === index) return;
+  dockDragState.previewIndex = index;
+  getDockButtons().forEach((button, buttonIndex) => {
+    button.classList.toggle("is-preview", buttonIndex === index);
+  });
+}
+
+function getDockIndexFromEvent(event) {
+  const button = event.target.closest?.(".dock-filter-button");
+  if (button && els.bottomDock.contains(button)) {
+    return getDockButtons().indexOf(button);
+  }
+  return getNearestDockIndex(event.clientX);
 }
 
 function getNearestDockIndex(clientX) {
