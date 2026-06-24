@@ -110,7 +110,7 @@ const dockDragState = {
   suppressClick: false,
 };
 let spotDialogOpenFrame = null;
-let dockIndicatorBloomTimer = null;
+let dockIndicatorUpdateTimer = null;
 
 document.addEventListener("DOMContentLoaded", init);
 
@@ -275,6 +275,7 @@ function setRestaurantPanelOpen(isOpen) {
 }
 
 function setSearchPanelOpen(isOpen) {
+  const wasOpen = isSearchPanelOpen();
   els.searchPanel.classList.toggle("is-open", isOpen);
   els.searchPanel.setAttribute("aria-expanded", String(isOpen));
   els.searchRow.setAttribute("aria-hidden", String(!isOpen));
@@ -288,9 +289,13 @@ function setSearchPanelOpen(isOpen) {
     els.searchInput.blur();
   }
   if (isOpen) {
-    stopDockIndicatorBloom();
+    updateDockIndicator();
+  } else if (wasOpen) {
+    els.bottomDock.style.setProperty("--dock-indicator-opacity", "0");
+    scheduleDockIndicatorUpdate(540);
+  } else {
+    updateDockIndicator();
   }
-  updateDockIndicator();
 }
 
 function isSearchPanelOpen() {
@@ -315,7 +320,6 @@ function setFilter(filter) {
   if (state.filter === nextFilter) {
     render();
     updateDockIndicator();
-    animateDockIndicator();
     return;
   }
 
@@ -324,7 +328,6 @@ function setFilter(filter) {
     button.classList.toggle("is-active", button.dataset.filter === nextFilter);
   });
   render();
-  animateDockIndicator();
 }
 
 function getDockButtons() {
@@ -359,21 +362,14 @@ function setDockIndicatorToIndex(index) {
   els.bottomDock.style.setProperty("--dock-indicator-opacity", "1");
 }
 
-function animateDockIndicator() {
-  if (isSearchPanelOpen() || dockDragState.isDragging) return;
-  stopDockIndicatorBloom();
-  // Force a style flush so repeated taps replay the bloom animation.
-  void els.bottomDock.offsetWidth;
-  els.bottomDock.classList.add("is-indicator-bloom");
-  dockIndicatorBloomTimer = window.setTimeout(stopDockIndicatorBloom, 760);
-}
-
-function stopDockIndicatorBloom() {
-  if (dockIndicatorBloomTimer) {
-    window.clearTimeout(dockIndicatorBloomTimer);
-    dockIndicatorBloomTimer = null;
+function scheduleDockIndicatorUpdate(delay = 0) {
+  if (dockIndicatorUpdateTimer) {
+    window.clearTimeout(dockIndicatorUpdateTimer);
   }
-  els.bottomDock?.classList.remove("is-indicator-bloom");
+  dockIndicatorUpdateTimer = window.setTimeout(() => {
+    dockIndicatorUpdateTimer = null;
+    updateDockIndicator();
+  }, delay);
 }
 
 function handleDockClickCapture(event) {
@@ -392,7 +388,6 @@ function handleDockPointerDown(event) {
   dockDragState.startY = event.clientY;
   dockDragState.isDragging = false;
   els.bottomDock.setPointerCapture?.(event.pointerId);
-  animateDockIndicator();
 }
 
 function handleDockPointerMove(event) {
