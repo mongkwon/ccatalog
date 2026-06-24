@@ -1332,7 +1332,7 @@ body.is-admin-mode .brand-add-button {
 
 .menu-entry {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 38px;
+  grid-template-columns: minmax(0, 1fr) minmax(78px, 0.55fr) 38px;
   gap: 8px;
   align-items: center;
 }
@@ -1386,6 +1386,11 @@ body.is-admin-mode .brand-add-button {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.menu-input-price {
+  color: var(--muted);
+  font-size: 11px;
 }
 
 .menu-input-chip button {
@@ -1725,7 +1730,7 @@ body.is-admin-mode .brand-add-button {
   }
 
   .menu-entry {
-    grid-template-columns: minmax(0, 1fr) 34px;
+    grid-template-columns: minmax(0, 1fr) minmax(70px, 0.55fr) 34px;
   }
 
   .menu-add-button {

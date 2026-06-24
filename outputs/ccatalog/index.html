@@ -4,12 +4,13 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>까탈로그</title>
-    <link rel="icon" type="image/svg+xml" href="./icon.svg?v=20260624-admin-mode" />
-    <link rel="apple-touch-icon" href="./icon.svg?v=20260624-admin-mode" />
+    <link rel="icon" type="image/svg+xml" href="./icon.svg?v=20260624-menu-price" />
+    <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png" />
     <meta name="theme-color" content="#eef4f8" />
+    <meta name="apple-mobile-web-app-title" content="까탈로그" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" />
-    <link rel="stylesheet" href="./styles.css?v=20260624-admin-mode" />
-    <script defer src="./app.js?v=20260624-admin-mode"></script>
+    <link rel="stylesheet" href="./styles.css?v=20260624-menu-price" />
+    <script defer src="./app.js?v=20260624-menu-price"></script>
   </head>
   <body>
     <main class="app-shell">
@@ -175,6 +176,15 @@
             <span>추천메뉴</span>
             <div class="menu-entry">
               <input id="menuDraftInput" type="text" maxlength="40" placeholder="메뉴명" autocomplete="off" />
+              <input
+                id="menuPriceDraftInput"
+                class="menu-price-draft"
+                type="text"
+                inputmode="numeric"
+                maxlength="18"
+                placeholder="가격"
+                autocomplete="off"
+              />
               <button id="addMenuButton" class="menu-add-button" type="button" aria-label="메뉴 추가">
                 <span aria-hidden="true">+</span>
               </button>

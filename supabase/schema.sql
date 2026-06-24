@@ -10,11 +10,15 @@ create table if not exists public.restaurants (
   lat double precision not null check (lat between -90 and 90),
   lng double precision not null check (lng between -180 and 180),
   menus text[] not null default '{}'::text[],
+  menu_items jsonb not null default '[]'::jsonb,
   delivery_apps text[] not null default '{}'::text[],
   memo text not null default '' check (char_length(memo) <= 180),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint restaurants_menus_limit check (coalesce(array_length(menus, 1), 0) <= 6),
+  constraint restaurants_menu_items_shape check (
+    jsonb_typeof(menu_items) = 'array' and jsonb_array_length(menu_items) <= 6
+  ),
   constraint restaurants_delivery_apps_allowed check (
     delivery_apps <@ array['baemin', 'coupangEats', 'yogiyo']::text[]
   )

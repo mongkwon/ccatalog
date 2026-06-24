@@ -184,6 +184,7 @@ function cacheElements() {
   els.placeSearchButton = document.getElementById("placeSearchButton");
   els.placeResultList = document.getElementById("placeResultList");
   els.menuDraftInput = document.getElementById("menuDraftInput");
+  els.menuPriceDraftInput = document.getElementById("menuPriceDraftInput");
   els.addMenuButton = document.getElementById("addMenuButton");
   els.menuInputList = document.getElementById("menuInputList");
   els.filterButtons = [...document.querySelectorAll(".dock-filter-button")];
@@ -279,6 +280,12 @@ function bindEvents() {
   });
 
   els.menuDraftInput.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    addMenuFromDraft();
+  });
+
+  els.menuPriceDraftInput.addEventListener("keydown", (event) => {
     if (event.key !== "Enter") return;
     event.preventDefault();
     addMenuFromDraft();
@@ -848,57 +855,72 @@ function inferCategoryFromPlace(category) {
 }
 
 function addMenuFromDraft({ refocus = true } = {}) {
-  const menu = els.menuDraftInput.value.trim();
-  if (!menu) {
+  const name = els.menuDraftInput.value.trim();
+  const price = normalizeMenuPrice(els.menuPriceDraftInput.value);
+  if (!name) {
     if (refocus) {
       els.menuDraftInput.focus();
     }
     return;
   }
 
-  const currentMenus = getMenuInputValues();
-  if (currentMenus.length >= 6 || currentMenus.includes(menu)) {
+  const currentItems = getMenuInputItems();
+  if (currentItems.length >= 6 || currentItems.some((item) => item.name === name)) {
     els.menuDraftInput.value = "";
+    els.menuPriceDraftInput.value = "";
     if (refocus) {
       els.menuDraftInput.focus();
     }
     return;
   }
 
-  appendMenuInput(menu);
+  appendMenuInput({ name, price });
   els.menuDraftInput.value = "";
+  els.menuPriceDraftInput.value = "";
   if (refocus) {
     els.menuDraftInput.focus();
   }
 }
 
-function renderMenuInputs(menus) {
+function renderMenuInputs(menuItems, fallbackMenus = []) {
   els.menuInputList.innerHTML = "";
-  normalizeMenuValues(menus).forEach((menu) => appendMenuInput(menu));
+  normalizeMenuItems(menuItems, fallbackMenus).forEach((menuItem) => appendMenuInput(menuItem));
 }
 
-function appendMenuInput(menu) {
+function appendMenuInput(menuItem) {
+  const normalizedItem = normalizeMenuItem(menuItem);
+  if (!normalizedItem) return;
+
   const chip = document.createElement("span");
   chip.className = "menu-input-chip";
 
   const label = document.createElement("span");
-  label.textContent = menu;
+  label.textContent = normalizedItem.name;
+
+  const priceLabel = document.createElement("span");
+  priceLabel.className = "menu-input-price";
+  priceLabel.textContent = normalizedItem.price || "가격 미입력";
 
   const input = document.createElement("input");
   input.type = "hidden";
   input.name = "menus";
-  input.value = menu;
+  input.value = normalizedItem.name;
+
+  const itemInput = document.createElement("input");
+  itemInput.type = "hidden";
+  itemInput.name = "menuItems";
+  itemInput.value = JSON.stringify(normalizedItem);
 
   const removeButton = document.createElement("button");
   removeButton.type = "button";
-  removeButton.setAttribute("aria-label", `${menu} 삭제`);
+  removeButton.setAttribute("aria-label", `${normalizedItem.name} 삭제`);
   removeButton.textContent = "×";
   removeButton.addEventListener("click", () => {
     chip.remove();
     els.menuDraftInput.focus();
   });
 
-  chip.append(label, input, removeButton);
+  chip.append(label, priceLabel, input, itemInput, removeButton);
   els.menuInputList.append(chip);
 }
 
@@ -906,9 +928,59 @@ function getMenuInputValues() {
   return [...els.menuInputList.querySelectorAll('input[name="menus"]')].map((input) => input.value);
 }
 
+function getMenuInputItems() {
+  return [...els.menuInputList.querySelectorAll('input[name="menuItems"]')]
+    .map((input) => {
+      try {
+        return JSON.parse(input.value);
+      } catch {
+        return null;
+      }
+    })
+    .filter(Boolean);
+}
+
 function normalizeMenuValues(values) {
   if (!Array.isArray(values)) return [];
   return [...new Set(values.map(String).map((menu) => menu.trim()).filter(Boolean))].slice(0, 6);
+}
+
+function normalizeMenuItems(menuItems, fallbackMenus = []) {
+  const sourceItems = Array.isArray(menuItems) && menuItems.length > 0 ? menuItems : normalizeMenuValues(fallbackMenus);
+  const normalizedItems = [];
+  const seenNames = new Set();
+
+  sourceItems.forEach((item) => {
+    const normalizedItem = normalizeMenuItem(item);
+    if (!normalizedItem || seenNames.has(normalizedItem.name)) return;
+    seenNames.add(normalizedItem.name);
+    normalizedItems.push(normalizedItem);
+  });
+
+  return normalizedItems.slice(0, 6);
+}
+
+function normalizeMenuItem(item) {
+  const name = typeof item === "object" && item !== null ? item.name : item;
+  const price = typeof item === "object" && item !== null ? item.price : "";
+  const normalizedName = String(name || "").trim();
+  if (!normalizedName) return null;
+  return {
+    name: normalizedName,
+    price: normalizeMenuPrice(price),
+  };
+}
+
+function normalizeMenuPrice(value) {
+  const text = String(value || "").trim().replace(/\s+/g, " ");
+  if (!text) return "";
+
+  const numberText = text.replace(/[,\s원]/g, "");
+  if (/^\d+$/.test(numberText)) {
+    return `${Number(numberText).toLocaleString("ko-KR")}원`;
+  }
+
+  return text.slice(0, 18);
 }
 
 async function initializeMap() {
@@ -999,6 +1071,7 @@ function getVisibleRestaurants() {
         restaurant.area,
         restaurant.memo,
         ...restaurant.menus,
+        ...restaurant.menuItems.map((item) => item.price),
         ...deliveryLabels(restaurant.deliveryApps),
       ]
         .join(" ")
@@ -1021,7 +1094,7 @@ function renderList(restaurants) {
 
   const fragment = document.createDocumentFragment();
   restaurants.forEach((restaurant) => {
-    const preview = [restaurant.menus.slice(0, 2).join(" · "), deliverySummary(restaurant.deliveryApps)]
+    const preview = [menuItemsSummary(restaurant.menuItems, 2), deliverySummary(restaurant.deliveryApps)]
       .filter(Boolean)
       .join(" · ");
     const button = document.createElement("button");
@@ -1069,7 +1142,7 @@ function renderSelectedCard(visibleRestaurants) {
       <div class="card-main">
         <h2>${escapeHtml(restaurant.name)}</h2>
         <p class="card-sub">${escapeHtml([restaurant.category, restaurant.area].filter(Boolean).join(" · "))}</p>
-        ${menuChips(restaurant.menus)}
+        ${menuChips(restaurant.menuItems)}
         ${deliveryChips(restaurant.deliveryApps)}
         ${restaurant.memo ? `<p class="memo">${escapeHtml(restaurant.memo)}</p>` : ""}
       </div>
@@ -1121,7 +1194,7 @@ function openSpotDialog(restaurant = null) {
     els.nameInput.value = restaurant.name;
     els.categoryInput.value = restaurant.category;
     els.areaInput.value = restaurant.area;
-    renderMenuInputs(restaurant.menus);
+    renderMenuInputs(restaurant.menuItems, restaurant.menus);
     fillCoordinateInputs({ lat: restaurant.lat, lng: restaurant.lng });
     setStoredPlaceCandidate(restaurant);
     document.getElementById("memoInput").value = restaurant.memo;
@@ -1169,7 +1242,7 @@ async function handleSpotSubmit(event) {
     area: String(formData.get("area") || existingRestaurant?.area || "").trim(),
     lat,
     lng,
-    menus: normalizeMenuValues(formData.getAll("menus")),
+    menuItems: normalizeMenuItems(getMenuInputItems(), formData.getAll("menus")),
     deliveryApps: normalizeDeliveryApps(formData.getAll("deliveryApps")),
     memo: String(formData.get("memo") || "").trim(),
   };
@@ -1247,9 +1320,17 @@ function ratingBadge(rating) {
   `;
 }
 
-function menuChips(menus) {
-  if (!menus.length) return "";
-  return `<div class="menu-row">${menus.map((menu) => `<span class="menu-chip">${escapeHtml(menu)}</span>`).join("")}</div>`;
+function menuChips(menuItems) {
+  if (!menuItems.length) return "";
+  return `<div class="menu-row">${menuItems.map((item) => `<span class="menu-chip">${escapeHtml(menuItemLabel(item))}</span>`).join("")}</div>`;
+}
+
+function menuItemsSummary(menuItems, limit = 2) {
+  return menuItems.slice(0, limit).map(menuItemLabel).join(" · ");
+}
+
+function menuItemLabel(item) {
+  return [item.name, item.price].filter(Boolean).join(" ");
 }
 
 function deliveryChips(deliveryApps) {
@@ -1453,6 +1534,7 @@ const RESTAURANT_SELECT_COLUMNS = [
   "lat",
   "lng",
   "menus",
+  "menu_items",
   "delivery_apps",
   "memo",
   "created_at",
@@ -1469,6 +1551,7 @@ function rowToRestaurant(row, userId) {
     lat: row.lat,
     lng: row.lng,
     menus: row.menus,
+    menuItems: row.menu_items,
     deliveryApps: row.delivery_apps,
     memo: row.memo,
     canEdit: row.owner_id === userId,
@@ -1476,6 +1559,7 @@ function rowToRestaurant(row, userId) {
 }
 
 function restaurantToRow(restaurant, { includeId = true } = {}) {
+  const menuItems = normalizeMenuItems(restaurant.menuItems, restaurant.menus);
   const row = {
     name: restaurant.name,
     category: restaurant.category,
@@ -1483,7 +1567,8 @@ function restaurantToRow(restaurant, { includeId = true } = {}) {
     area: restaurant.area,
     lat: restaurant.lat,
     lng: restaurant.lng,
-    menus: normalizeMenuValues(restaurant.menus),
+    menus: menuItems.map((item) => item.name),
+    menu_items: menuItems,
     delivery_apps: normalizeDeliveryApps(restaurant.deliveryApps),
     memo: restaurant.memo,
   };
@@ -1529,6 +1614,7 @@ function normalizeRestaurant(item) {
   const rating = Number(item.rating);
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
   if (!isSupportedRating(rating)) return null;
+  const menuItems = normalizeMenuItems(item.menuItems || item.menu_items, item.menus);
   return {
     id: String(item.id || createId()),
     name: String(item.name || "이름 없음"),
@@ -1537,7 +1623,8 @@ function normalizeRestaurant(item) {
     area: String(item.area || ""),
     lat,
     lng,
-    menus: Array.isArray(item.menus) ? item.menus.map(String).filter(Boolean).slice(0, 6) : [],
+    menus: menuItems.map((menuItem) => menuItem.name),
+    menuItems,
     deliveryApps: normalizeDeliveryApps(item.deliveryApps),
     memo: String(item.memo || ""),
     canEdit: item.canEdit !== false,
