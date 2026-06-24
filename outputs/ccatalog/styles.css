@@ -200,7 +200,6 @@ button {
 }
 
 .brand,
-.top-actions,
 .restaurant-panel,
 .selected-card,
 .modal-card {
@@ -219,7 +218,6 @@ button {
 }
 
 .brand::before,
-.top-actions::before,
 .restaurant-panel::before,
 .selected-card::before,
 .modal-card::before {
@@ -285,41 +283,6 @@ button {
   white-space: nowrap;
 }
 
-.top-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 7px;
-  border-radius: 999px;
-  pointer-events: auto;
-}
-
-.provider-badge {
-  display: inline-flex;
-  min-width: 78px;
-  height: 34px;
-  align-items: center;
-  justify-content: center;
-  padding: 0 12px;
-  border: 1px solid rgba(17, 24, 32, 0.1);
-  border-radius: 999px;
-  color: var(--soft-ink);
-  background: rgba(255, 255, 255, 0.3);
-  font-size: 11px;
-  font-weight: 900;
-  white-space: nowrap;
-}
-
-.provider-badge[data-state="naver"],
-.provider-badge[data-state="mock"] {
-  color: var(--ink);
-}
-
-.provider-badge[data-state="error"] {
-  color: #7f2619;
-  background: rgba(255, 196, 184, 0.58);
-}
-
 .icon-button {
   display: inline-grid;
   width: 38px;
@@ -358,13 +321,13 @@ button {
   left: 50%;
   bottom: 20px;
   display: grid;
-  width: min(860px, calc(100vw - 150px));
+  width: min(930px, calc(100vw - 40px));
   max-height: 230px;
   transform: translateX(-50%);
   grid-template-areas:
-    "search filters"
-    "meta list";
-  grid-template-columns: minmax(230px, 0.85fr) minmax(320px, 1.35fr);
+    "search filters action"
+    "meta list action";
+  grid-template-columns: minmax(230px, 0.85fr) minmax(320px, 1.35fr) 62px;
   gap: 10px 12px;
   padding: 12px;
   border-radius: 34px;
@@ -732,17 +695,15 @@ button {
   color: var(--danger);
 }
 
-.fab {
-  position: absolute;
-  z-index: 30;
-  right: 24px;
-  bottom: 24px;
+.panel-add-button {
+  grid-area: action;
+  align-self: stretch;
   display: grid;
-  width: 64px;
-  height: 64px;
+  width: 62px;
+  min-height: 98px;
   place-items: center;
   border: 1px solid rgba(255, 255, 255, 0.84);
-  border-radius: 50%;
+  border-radius: 999px;
   color: #063342;
   background:
     var(--glass-sheen),
@@ -754,7 +715,13 @@ button {
   -webkit-backdrop-filter: blur(18px) saturate(1.55);
 }
 
-.fab span {
+.panel-add-button:hover {
+  background:
+    var(--glass-sheen),
+    linear-gradient(145deg, rgba(235, 254, 255, 0.96), rgba(82, 215, 236, 0.72));
+}
+
+.panel-add-button span {
   transform: translateY(-2px);
   font-size: 34px;
   font-weight: 500;
@@ -1072,12 +1039,12 @@ button {
 
 @media (max-width: 940px) {
   .restaurant-panel {
-    width: min(720px, calc(100vw - 128px));
+    width: min(790px, calc(100vw - 32px));
     grid-template-areas:
-      "search search"
-      "filters filters"
-      "meta list";
-    grid-template-columns: 170px minmax(0, 1fr);
+      "search search action"
+      "filters filters action"
+      "meta list action";
+    grid-template-columns: 170px minmax(0, 1fr) 58px;
     max-height: 256px;
   }
 
@@ -1103,8 +1070,7 @@ button {
     padding-right: 12px;
   }
 
-  .brand p,
-  .provider-badge {
+  .brand p {
     display: none;
   }
 
@@ -1118,23 +1084,19 @@ button {
     font-size: 17px;
   }
 
-  .top-actions {
-    padding: 6px;
-  }
-
   .restaurant-panel {
-    right: 88px;
+    right: 12px;
     bottom: 12px;
     left: 12px;
     width: auto;
     max-height: 290px;
     transform: none;
     grid-template-areas:
-      "search"
-      "filters"
-      "meta"
-      "list";
-    grid-template-columns: minmax(0, 1fr);
+      "search action"
+      "filters filters"
+      "meta meta"
+      "list list";
+    grid-template-columns: minmax(0, 1fr) 48px;
     gap: 8px;
     padding: 10px;
     border-radius: 28px;
@@ -1207,11 +1169,13 @@ button {
     font-size: 20px;
   }
 
-  .fab {
-    right: 16px;
-    bottom: 18px;
-    width: 60px;
-    height: 60px;
+  .panel-add-button {
+    width: 48px;
+    min-height: 40px;
+  }
+
+  .panel-add-button span {
+    font-size: 28px;
   }
 
   .form-grid {
@@ -1241,10 +1205,6 @@ button {
 }
 
 @media (max-width: 380px) {
-  .restaurant-panel {
-    right: 82px;
-  }
-
   .filter-chip {
     font-size: 10px;
   }

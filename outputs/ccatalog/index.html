@@ -41,10 +41,6 @@
               <p>취향에 엄격한 맛집 지도</p>
             </div>
           </div>
-
-          <div class="top-actions">
-            <span id="providerBadge" class="provider-badge">지도 준비</span>
-          </div>
         </header>
 
         <aside class="restaurant-panel" aria-label="맛집 목록">
@@ -69,13 +65,13 @@
           </div>
 
           <div id="restaurantList" class="restaurant-list"></div>
+
+          <button id="addButton" class="panel-add-button" type="button" title="맛집 추가" aria-label="맛집 추가">
+            <span aria-hidden="true">+</span>
+          </button>
         </aside>
 
         <article id="selectedCard" class="selected-card hidden" aria-live="polite"></article>
-
-        <button id="addButton" class="fab" type="button" title="맛집 추가" aria-label="맛집 추가">
-          <span aria-hidden="true">+</span>
-        </button>
       </section>
     </main>
 

@@ -125,7 +125,6 @@ function cacheElements() {
   els.map = document.getElementById("map");
   els.mockMap = document.getElementById("mockMap");
   els.mockPins = document.getElementById("mockPins");
-  els.providerBadge = document.getElementById("providerBadge");
   els.searchInput = document.getElementById("searchInput");
   els.restaurantList = document.getElementById("restaurantList");
   els.resultCount = document.getElementById("resultCount");
@@ -505,9 +504,8 @@ function pinHtml(restaurant, selectedId) {
   `;
 }
 
-function setProviderBadge(label, stateName) {
-  els.providerBadge.textContent = label;
-  els.providerBadge.dataset.state = stateName;
+function setProviderBadge() {
+  // Map status is intentionally not rendered in the UI.
 }
 
 function loadRestaurants() {
