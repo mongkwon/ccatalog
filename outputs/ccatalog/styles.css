@@ -391,7 +391,7 @@ button {
 }
 
 .is-search-open .restaurant-panel {
-  bottom: calc(var(--floating-bottom) + 76px);
+  bottom: var(--floating-bottom);
 }
 
 .search-row {
@@ -404,9 +404,9 @@ button {
   gap: 9px;
   height: var(--dock-button-height);
   padding: 0 15px;
-  border: 1px solid rgba(17, 24, 32, 0.1);
+  border: 1px solid transparent;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.3);
+  background: transparent;
   box-shadow: none;
   opacity: 0;
   pointer-events: none;
@@ -427,8 +427,8 @@ button {
 }
 
 .search-row:focus-within {
-  border-color: rgba(17, 24, 32, 0.22);
-  background: rgba(17, 24, 32, 0.04);
+  border-color: transparent;
+  background: transparent;
 }
 
 .search-row svg {
@@ -1518,7 +1518,7 @@ button {
   }
 
   .is-search-open .restaurant-panel {
-    bottom: calc(var(--floating-bottom) + 72px);
+    bottom: var(--floating-bottom);
   }
 
   .dock-cluster {
@@ -1644,7 +1644,7 @@ button {
   }
 
   .is-search-open .restaurant-panel {
-    bottom: calc(var(--floating-bottom) + 70px);
+    bottom: var(--floating-bottom);
   }
 
   .modal {
