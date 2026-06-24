@@ -65,6 +65,7 @@
         </div>
 
         <nav class="bottom-dock" aria-label="지도 도구">
+          <span class="dock-indicator" aria-hidden="true"></span>
           <button
             id="panelToggle"
             class="dock-button"
@@ -91,7 +92,15 @@
               <path d="m21 21-5-5m2-5a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z" />
             </svg>
           </button>
-          <button id="addButton" class="dock-button dock-button-primary" type="button" title="맛집 추가" aria-label="맛집 추가">
+          <button
+            id="addButton"
+            class="dock-button dock-button-primary"
+            type="button"
+            title="맛집 추가"
+            aria-label="맛집 추가"
+            aria-controls="spotDialog"
+            aria-expanded="false"
+          >
             <span aria-hidden="true">+</span>
           </button>
         </nav>
@@ -100,7 +109,7 @@
       </section>
     </main>
 
-    <dialog id="spotDialog" class="modal">
+    <section id="spotDialog" class="modal" role="dialog" aria-labelledby="spotDialogTitle" aria-hidden="true">
       <form id="spotForm" class="modal-card">
         <input type="hidden" id="spotId" name="id" />
         <div class="modal-header">
@@ -121,7 +130,7 @@
             <input id="nameInput" name="name" type="text" required maxlength="40" />
           </label>
 
-          <label class="field">
+          <label class="field span-2">
             <span>분류</span>
             <select id="categoryInput" name="category">
               <option>한식</option>
@@ -133,11 +142,6 @@
               <option>바</option>
               <option>기타</option>
             </select>
-          </label>
-
-          <label class="field">
-            <span>동네</span>
-            <input id="areaInput" name="area" type="text" maxlength="40" />
           </label>
 
           <fieldset class="rating-field span-2">
@@ -160,10 +164,16 @@
             </label>
           </fieldset>
 
-          <label class="field span-2">
+          <div class="menu-field span-2">
             <span>추천메뉴</span>
-            <input id="menusInput" name="menus" type="text" maxlength="120" placeholder="쉼표로 구분" />
-          </label>
+            <div class="menu-entry">
+              <input id="menuDraftInput" type="text" maxlength="40" placeholder="메뉴명" autocomplete="off" />
+              <button id="addMenuButton" class="menu-add-button" type="button" aria-label="메뉴 추가">
+                <span aria-hidden="true">+</span>
+              </button>
+            </div>
+            <div id="menuInputList" class="menu-input-list" aria-label="추가된 추천메뉴"></div>
+          </div>
 
           <fieldset class="delivery-field span-2">
             <legend>배달가능여부</legend>
@@ -184,17 +194,6 @@
           <input id="latInput" name="lat" type="hidden" />
           <input id="lngInput" name="lng" type="hidden" />
 
-          <div class="location-field span-2">
-            <span>위치</span>
-            <div class="location-control">
-              <div class="location-readout">
-                <strong id="locationStatus">선택 위치</strong>
-                <small id="locationSummary">37.566535, 126.977969</small>
-              </div>
-              <button id="useCenterButton" class="secondary-button" type="button">지도 중심</button>
-            </div>
-          </div>
-
           <label class="field span-2">
             <span>메모</span>
             <textarea id="memoInput" name="memo" rows="2" maxlength="180"></textarea>
@@ -206,7 +205,7 @@
           <button class="primary-button" type="submit">저장</button>
         </div>
       </form>
-    </dialog>
+    </section>
 
   </body>
 </html>

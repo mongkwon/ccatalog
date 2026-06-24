@@ -1,4 +1,5 @@
 const STORAGE_KEY = "ccatalog.restaurants.v1";
+const DOCK_SLIDE_ACTIVATION_MS = 180;
 const runtimeConfig = {
   naverMapKey: "",
 };
@@ -96,6 +97,15 @@ const state = {
 };
 
 const els = {};
+const dockDragState = {
+  pointerId: null,
+  startX: 0,
+  startY: 0,
+  isDragging: false,
+  suppressClick: false,
+};
+let dockActivationTimer = null;
+let spotDialogOpenFrame = null;
 
 document.addEventListener("DOMContentLoaded", init);
 
@@ -132,15 +142,17 @@ function cacheElements() {
   els.resultCount = document.getElementById("resultCount");
   els.ratingSummary = document.getElementById("ratingSummary");
   els.selectedCard = document.getElementById("selectedCard");
+  els.bottomDock = document.querySelector(".bottom-dock");
+  els.dockIndicator = document.querySelector(".dock-indicator");
   els.addButton = document.getElementById("addButton");
   els.panelToggle = document.getElementById("panelToggle");
   els.searchToggle = document.getElementById("searchToggle");
   els.spotDialog = document.getElementById("spotDialog");
   els.spotForm = document.getElementById("spotForm");
   els.spotDialogTitle = document.getElementById("spotDialogTitle");
-  els.useCenterButton = document.getElementById("useCenterButton");
-  els.locationSummary = document.getElementById("locationSummary");
-  els.locationStatus = document.getElementById("locationStatus");
+  els.menuDraftInput = document.getElementById("menuDraftInput");
+  els.addMenuButton = document.getElementById("addMenuButton");
+  els.menuInputList = document.getElementById("menuInputList");
   els.filterButtons = [...document.querySelectorAll(".filter-chip")];
 }
 
@@ -159,56 +171,50 @@ function bindEvents() {
   });
 
   els.panelToggle.addEventListener("click", () => {
-    closeSpotDialog();
-    setSearchPanelOpen(false);
-    setRestaurantPanelOpen(!els.restaurantPanel.classList.contains("is-open"));
+    slideDockThenActivate("list", { toggle: true });
   });
 
   els.searchToggle.addEventListener("click", () => {
-    closeSpotDialog();
-    setRestaurantPanelOpen(false);
-    const nextOpen = !els.searchPanel.classList.contains("is-open");
-    setSearchPanelOpen(nextOpen);
-    if (nextOpen) {
-      els.searchInput.focus();
-    }
+    slideDockThenActivate("search", { toggle: true });
   });
 
   els.addButton.addEventListener("click", () => {
-    const shouldOpen = !els.spotDialog.open;
-    closeFloatingPanels();
-    closeSpotDialog();
-    if (shouldOpen) {
-      openSpotDialog();
-    }
+    slideDockThenActivate("add", { toggle: true });
   });
 
+  els.bottomDock.addEventListener("click", handleDockClickCapture, true);
+  els.bottomDock.addEventListener("pointerdown", handleDockPointerDown);
+  els.bottomDock.addEventListener("pointermove", handleDockPointerMove);
+  els.bottomDock.addEventListener("pointerup", handleDockPointerUp);
+  els.bottomDock.addEventListener("pointercancel", cancelDockDrag);
+  window.addEventListener("resize", updateDockIndicator);
+
   document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && !els.spotDialog.open) {
+    if (event.key !== "Escape") return;
+
+    if (isSpotDialogOpen()) {
+      closeSpotDialog();
+    } else {
       closeFloatingPanels();
     }
   });
 
   document.querySelectorAll("[data-close-dialog]").forEach((button) => {
     button.addEventListener("click", () => {
-      const dialog = document.getElementById(button.dataset.closeDialog);
-      dialog.close();
+      if (button.dataset.closeDialog === "spotDialog") {
+        closeSpotDialog();
+      }
     });
   });
 
-  els.spotDialog.addEventListener("click", (event) => {
-    if (event.target === els.spotDialog) {
-      els.spotDialog.close();
-    }
+  els.addMenuButton.addEventListener("click", () => {
+    addMenuFromDraft();
   });
 
-  els.spotDialog.addEventListener("close", () => {
-    document.body.classList.remove("is-picking-location");
-  });
-
-  els.useCenterButton.addEventListener("click", () => {
-    const coord = state.map?.getCenter() ?? state.lastMapCoord;
-    fillCoordinateInputs(coord, "지도 중심");
+  els.menuDraftInput.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    addMenuFromDraft();
   });
 
   els.spotForm.addEventListener("submit", handleSpotSubmit);
@@ -220,6 +226,7 @@ function setRestaurantPanelOpen(isOpen) {
   els.panelToggle.classList.toggle("is-active", isOpen);
   els.panelToggle.setAttribute("aria-expanded", String(isOpen));
   document.body.classList.toggle("is-list-open", isOpen);
+  updateDockIndicator();
 }
 
 function setSearchPanelOpen(isOpen) {
@@ -228,6 +235,7 @@ function setSearchPanelOpen(isOpen) {
   els.searchToggle.classList.toggle("is-active", isOpen);
   els.searchToggle.setAttribute("aria-expanded", String(isOpen));
   document.body.classList.toggle("is-search-open", isOpen);
+  updateDockIndicator();
 }
 
 function closeFloatingPanels() {
@@ -235,10 +243,300 @@ function closeFloatingPanels() {
   setSearchPanelOpen(false);
 }
 
-function closeSpotDialog() {
-  if (els.spotDialog.open) {
-    els.spotDialog.close();
+function slideDockThenActivate(target, { toggle = false } = {}) {
+  window.clearTimeout(dockActivationTimer);
+
+  const targetIndex = getDockTargetIndex(target);
+  const activeIndex = getActiveDockIndex();
+  const shouldCloseActive = toggle && targetIndex === activeIndex;
+
+  if (targetIndex >= 0 && !shouldCloseActive) {
+    setDockIndicatorToIndex(targetIndex);
   }
+
+  dockActivationTimer = window.setTimeout(() => {
+    dockActivationTimer = null;
+    activateDockTarget(target, { toggle });
+  }, shouldCloseActive ? 0 : DOCK_SLIDE_ACTIVATION_MS);
+}
+
+function activateDockTarget(target, { toggle = false } = {}) {
+  window.clearTimeout(dockActivationTimer);
+  dockActivationTimer = null;
+
+  if (target === "list") {
+    const nextOpen = toggle ? !els.restaurantPanel.classList.contains("is-open") : true;
+    closeSpotDialog();
+    closeSelectedRestaurant();
+    setSearchPanelOpen(false);
+    setRestaurantPanelOpen(nextOpen);
+    return;
+  }
+
+  if (target === "search") {
+    const nextOpen = toggle ? !els.searchPanel.classList.contains("is-open") : true;
+    closeSpotDialog();
+    closeSelectedRestaurant();
+    setRestaurantPanelOpen(false);
+    setSearchPanelOpen(nextOpen);
+    if (nextOpen) {
+      els.searchInput.focus();
+    }
+    return;
+  }
+
+  if (target === "add") {
+    const shouldOpen = toggle ? !isSpotDialogOpen() : true;
+    closeFloatingPanels();
+    closeSpotDialog();
+    closeSelectedRestaurant();
+    if (shouldOpen) {
+      openSpotDialog();
+    }
+  }
+}
+
+function getDockButtons() {
+  return [els.panelToggle, els.searchToggle, els.addButton];
+}
+
+function getDockTargetIndex(target) {
+  return ["list", "search", "add"].indexOf(target);
+}
+
+function getActiveDockIndex() {
+  if (els.restaurantPanel.classList.contains("is-open")) return 0;
+  if (els.searchPanel.classList.contains("is-open")) return 1;
+  if (isSpotDialogOpen()) return 2;
+  return -1;
+}
+
+function updateDockIndicator() {
+  if (!els.dockIndicator) return;
+  const index = getActiveDockIndex();
+  if (index < 0) {
+    els.bottomDock.style.setProperty("--dock-indicator-opacity", "0");
+    return;
+  }
+
+  setDockIndicatorToIndex(index);
+}
+
+function setDockIndicatorToIndex(index) {
+  const button = getDockButtons()[index];
+  if (!button) return;
+  els.bottomDock.style.setProperty("--dock-indicator-x", `${button.offsetLeft}px`);
+  els.bottomDock.style.setProperty("--dock-indicator-width", `${button.offsetWidth}px`);
+  els.bottomDock.style.setProperty("--dock-indicator-opacity", "1");
+}
+
+function handleDockClickCapture(event) {
+  if (!dockDragState.suppressClick) return;
+  event.preventDefault();
+  event.stopPropagation();
+  event.stopImmediatePropagation();
+  dockDragState.suppressClick = false;
+}
+
+function handleDockPointerDown(event) {
+  if (event.pointerType === "mouse" && event.button !== 0) return;
+  dockDragState.pointerId = event.pointerId;
+  dockDragState.startX = event.clientX;
+  dockDragState.startY = event.clientY;
+  dockDragState.isDragging = false;
+  els.bottomDock.setPointerCapture?.(event.pointerId);
+}
+
+function handleDockPointerMove(event) {
+  if (event.pointerId !== dockDragState.pointerId) return;
+
+  const deltaX = event.clientX - dockDragState.startX;
+  const deltaY = event.clientY - dockDragState.startY;
+  const distance = Math.hypot(deltaX, deltaY);
+
+  if (!dockDragState.isDragging) {
+    if (distance < 6) return;
+    if (Math.abs(deltaY) > Math.abs(deltaX) + 4) {
+      cancelDockDrag(event);
+      return;
+    }
+    dockDragState.isDragging = true;
+    els.bottomDock.classList.add("is-dragging");
+  }
+
+  event.preventDefault();
+  moveDockIndicatorToPointer(event.clientX);
+}
+
+function handleDockPointerUp(event) {
+  if (event.pointerId !== dockDragState.pointerId) return;
+  const didDrag = dockDragState.isDragging;
+  const targetIndex = getNearestDockIndex(event.clientX);
+  finishDockDrag(event);
+
+  if (targetIndex < 0) return;
+  event.preventDefault();
+  dockDragState.suppressClick = true;
+  window.setTimeout(() => {
+    dockDragState.suppressClick = false;
+  }, 120);
+
+  const target = ["list", "search", "add"][targetIndex];
+  if (didDrag) {
+    activateDockTarget(target, { toggle: false });
+  } else {
+    slideDockThenActivate(target, { toggle: true });
+  }
+}
+
+function cancelDockDrag(event) {
+  if (event?.pointerId && event.pointerId !== dockDragState.pointerId) return;
+  finishDockDrag(event);
+  updateDockIndicator();
+}
+
+function finishDockDrag(event) {
+  if (dockDragState.pointerId !== null) {
+    els.bottomDock.releasePointerCapture?.(dockDragState.pointerId);
+  }
+  dockDragState.pointerId = null;
+  dockDragState.isDragging = false;
+  els.bottomDock.classList.remove("is-dragging");
+}
+
+function moveDockIndicatorToPointer(clientX) {
+  const buttons = getDockButtons();
+  const nearestIndex = getNearestDockIndex(clientX);
+  if (nearestIndex < 0) return;
+
+  const dockRect = els.bottomDock.getBoundingClientRect();
+  const button = buttons[nearestIndex];
+  const width = button.offsetWidth;
+  const firstX = buttons[0].offsetLeft;
+  const lastButton = buttons[buttons.length - 1];
+  const maxX = lastButton.offsetLeft + lastButton.offsetWidth - width;
+  const nextX = Math.max(firstX, Math.min(maxX, clientX - dockRect.left - width / 2));
+
+  els.bottomDock.style.setProperty("--dock-indicator-x", `${nextX}px`);
+  els.bottomDock.style.setProperty("--dock-indicator-width", `${width}px`);
+  els.bottomDock.style.setProperty("--dock-indicator-opacity", "1");
+}
+
+function getNearestDockIndex(clientX) {
+  const buttons = getDockButtons();
+  let nearestIndex = -1;
+  let nearestDistance = Infinity;
+
+  buttons.forEach((button, index) => {
+    const rect = button.getBoundingClientRect();
+    const center = rect.left + rect.width / 2;
+    const distance = Math.abs(center - clientX);
+    if (distance < nearestDistance) {
+      nearestDistance = distance;
+      nearestIndex = index;
+    }
+  });
+
+  return nearestIndex;
+}
+
+function isSpotDialogOpen() {
+  return els.spotDialog.classList.contains("is-open") || els.addButton.classList.contains("is-active");
+}
+
+function closeSpotDialog() {
+  if (!isSpotDialogOpen()) return;
+  if (spotDialogOpenFrame) {
+    window.cancelAnimationFrame(spotDialogOpenFrame);
+    spotDialogOpenFrame = null;
+  }
+  els.spotDialog.classList.remove("is-open");
+  els.spotDialog.setAttribute("aria-hidden", "true");
+  els.addButton.classList.remove("is-active");
+  els.addButton.setAttribute("aria-expanded", "false");
+  updateDockIndicator();
+}
+
+function openAnimatedSpotDialog() {
+  els.spotDialog.setAttribute("aria-hidden", "false");
+  els.addButton.classList.add("is-active");
+  els.addButton.setAttribute("aria-expanded", "true");
+  updateDockIndicator();
+  spotDialogOpenFrame = window.requestAnimationFrame(() => {
+    spotDialogOpenFrame = null;
+    if (!els.addButton.classList.contains("is-active")) return;
+    els.spotDialog.classList.add("is-open");
+  });
+}
+
+function closeSelectedRestaurant() {
+  if (!state.selectedId) return;
+  state.selectedId = null;
+  render();
+}
+
+function addMenuFromDraft({ refocus = true } = {}) {
+  const menu = els.menuDraftInput.value.trim();
+  if (!menu) {
+    if (refocus) {
+      els.menuDraftInput.focus();
+    }
+    return;
+  }
+
+  const currentMenus = getMenuInputValues();
+  if (currentMenus.length >= 6 || currentMenus.includes(menu)) {
+    els.menuDraftInput.value = "";
+    if (refocus) {
+      els.menuDraftInput.focus();
+    }
+    return;
+  }
+
+  appendMenuInput(menu);
+  els.menuDraftInput.value = "";
+  if (refocus) {
+    els.menuDraftInput.focus();
+  }
+}
+
+function renderMenuInputs(menus) {
+  els.menuInputList.innerHTML = "";
+  normalizeMenuValues(menus).forEach((menu) => appendMenuInput(menu));
+}
+
+function appendMenuInput(menu) {
+  const chip = document.createElement("span");
+  chip.className = "menu-input-chip";
+
+  const label = document.createElement("span");
+  label.textContent = menu;
+
+  const input = document.createElement("input");
+  input.type = "hidden";
+  input.name = "menus";
+  input.value = menu;
+
+  const removeButton = document.createElement("button");
+  removeButton.type = "button";
+  removeButton.setAttribute("aria-label", `${menu} 삭제`);
+  removeButton.textContent = "×";
+  removeButton.addEventListener("click", () => {
+    chip.remove();
+    els.menuDraftInput.focus();
+  });
+
+  chip.append(label, input, removeButton);
+  els.menuInputList.append(chip);
+}
+
+function getMenuInputValues() {
+  return [...els.menuInputList.querySelectorAll('input[name="menus"]')].map((input) => input.value);
+}
+
+function normalizeMenuValues(values) {
+  if (!Array.isArray(values)) return [];
+  return [...new Set(values.map(String).map((menu) => menu.trim()).filter(Boolean))].slice(0, 6);
 }
 
 async function initializeMap() {
@@ -266,9 +564,6 @@ async function activateMap(adapter) {
   await adapter.load();
   adapter.setClickHandler((coord) => {
     state.lastMapCoord = coord;
-    if (els.spotDialog.open) {
-      fillCoordinateInputs(coord);
-    }
   });
   state.map = adapter;
 }
@@ -396,6 +691,7 @@ function selectRestaurant(id) {
 
 function openSpotDialog(restaurant = null) {
   closeFloatingPanels();
+  closeSelectedRestaurant();
   els.spotForm.reset();
   document.getElementById("spotId").value = restaurant?.id ?? "";
   els.spotDialogTitle.textContent = restaurant ? "맛집 수정" : "맛집 추가";
@@ -403,8 +699,7 @@ function openSpotDialog(restaurant = null) {
   if (restaurant) {
     document.getElementById("nameInput").value = restaurant.name;
     document.getElementById("categoryInput").value = restaurant.category;
-    document.getElementById("areaInput").value = restaurant.area;
-    document.getElementById("menusInput").value = restaurant.menus.join(", ");
+    renderMenuInputs(restaurant.menus);
     fillCoordinateInputs({ lat: restaurant.lat, lng: restaurant.lng });
     document.getElementById("memoInput").value = restaurant.memo;
     const ratingInput = els.spotForm.querySelector(`[name="rating"][value="${restaurant.rating}"]`);
@@ -413,25 +708,25 @@ function openSpotDialog(restaurant = null) {
       input.checked = restaurant.deliveryApps.includes(input.value);
     });
   } else {
-    fillCoordinateInputs(state.map?.getCenter() ?? state.lastMapCoord, "지도 중심");
+    renderMenuInputs([]);
+    fillCoordinateInputs(state.map?.getCenter() ?? state.lastMapCoord);
   }
 
-  document.body.classList.add("is-picking-location");
-  if (!els.spotDialog.open) {
-    els.spotDialog.show();
-  }
+  openAnimatedSpotDialog();
   document.getElementById("nameInput").focus();
 }
 
 function handleSpotSubmit(event) {
   event.preventDefault();
+  addMenuFromDraft({ refocus: false });
   const formData = new FormData(els.spotForm);
   const id = String(formData.get("id") || "").trim();
   const lat = Number(formData.get("lat"));
   const lng = Number(formData.get("lng"));
+  const existingRestaurant = state.restaurants.find((restaurant) => restaurant.id === id);
 
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-    fillCoordinateInputs(state.map?.getCenter() ?? DEFAULT_CENTER, "지도 중심");
+    fillCoordinateInputs(state.map?.getCenter() ?? DEFAULT_CENTER);
     return;
   }
 
@@ -440,14 +735,10 @@ function handleSpotSubmit(event) {
     name: String(formData.get("name") || "").trim(),
     category: String(formData.get("category") || "기타").trim(),
     rating: clampRating(Number(formData.get("rating"))),
-    area: String(formData.get("area") || "").trim(),
+    area: existingRestaurant?.area ?? "",
     lat,
     lng,
-    menus: String(formData.get("menus") || "")
-      .split(",")
-      .map((menu) => menu.trim())
-      .filter(Boolean)
-      .slice(0, 6),
+    menus: normalizeMenuValues(formData.getAll("menus")),
     deliveryApps: normalizeDeliveryApps(formData.getAll("deliveryApps")),
     memo: String(formData.get("memo") || "").trim(),
   };
@@ -466,7 +757,7 @@ function handleSpotSubmit(event) {
 
   saveRestaurants();
   state.selectedId = nextRestaurant.id;
-  els.spotDialog.close();
+  closeSpotDialog();
   render();
   state.map?.panTo({ lat: nextRestaurant.lat, lng: nextRestaurant.lng });
 }
@@ -484,18 +775,12 @@ function deleteRestaurant(id) {
   render();
 }
 
-function fillCoordinateInputs(coord, label = "선택 위치") {
+function fillCoordinateInputs(coord) {
   const lat = Number(coord.lat);
   const lng = Number(coord.lng);
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
   document.getElementById("latInput").value = lat.toFixed(6);
   document.getElementById("lngInput").value = lng.toFixed(6);
-  if (els.locationStatus) {
-    els.locationStatus.textContent = label;
-  }
-  if (els.locationSummary) {
-    els.locationSummary.textContent = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
-  }
 }
 
 function ratingBadge(rating) {
