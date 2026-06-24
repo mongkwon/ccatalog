@@ -1462,16 +1462,16 @@ button {
   }
 
   .brand {
-    max-width: calc(100vw - 86px);
+    max-width: calc(100vw - 24px);
     padding-right: 12px;
-  }
-
-  .brand p {
-    display: none;
   }
 
   .brand h1 {
     font-size: 18px;
+  }
+
+  .brand p {
+    font-size: 10px;
   }
 
   .brand-add-button {
@@ -1719,12 +1719,6 @@ button {
   .selected-card h2 {
     max-width: none;
     font-size: 19px;
-  }
-
-  .selected-card .menu-row,
-  .selected-card .delivery-row,
-  .selected-card .memo {
-    display: none;
   }
 
   .selected-card .link-button,
