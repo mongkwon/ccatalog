@@ -152,8 +152,10 @@ function cacheElements() {
   els.resultCount = document.getElementById("resultCount");
   els.ratingSummary = document.getElementById("ratingSummary");
   els.selectedCard = document.getElementById("selectedCard");
+  els.dockCluster = document.querySelector(".dock-cluster");
   els.bottomDock = document.querySelector(".bottom-dock");
   els.dockIndicator = document.querySelector(".dock-indicator");
+  els.filterModeButton = document.getElementById("filterModeButton");
   els.addButton = document.getElementById("addButton");
   els.searchToggle = document.getElementById("searchToggle");
   els.spotDialog = document.getElementById("spotDialog");
@@ -198,16 +200,23 @@ function bindEvents() {
   });
 
   els.searchToggle.addEventListener("click", () => {
-    const nextOpen = !isSearchPanelOpen();
     if (isSpotDialogOpen()) {
       closeSpotDialog({ restorePanel: false });
     }
     closeSelectedRestaurant();
     setRestaurantPanelOpen(true);
-    setSearchPanelOpen(nextOpen);
-    if (nextOpen) {
-      els.searchInput.focus();
-    }
+    setSearchPanelOpen(true);
+    window.setTimeout(() => els.searchInput.focus(), 120);
+  });
+
+  els.filterModeButton.addEventListener("pointerdown", (event) => {
+    event.stopPropagation();
+  });
+
+  els.filterModeButton.addEventListener("click", (event) => {
+    event.stopPropagation();
+    setSearchPanelOpen(false);
+    setRestaurantPanelOpen(true);
   });
 
   els.bottomDock.addEventListener("click", handleDockClickCapture, true);
@@ -266,9 +275,12 @@ function setRestaurantPanelOpen(isOpen) {
 function setSearchPanelOpen(isOpen) {
   els.searchPanel.classList.toggle("is-open", isOpen);
   els.searchPanel.setAttribute("aria-hidden", String(!isOpen));
+  els.dockCluster.classList.toggle("is-search-mode", isOpen);
   els.searchToggle.classList.toggle("is-active", isOpen);
   els.searchToggle.setAttribute("aria-expanded", String(isOpen));
+  els.filterModeButton.setAttribute("aria-expanded", String(isOpen));
   document.body.classList.toggle("is-search-open", isOpen);
+  updateDockIndicator();
 }
 
 function isSearchPanelOpen() {
@@ -313,6 +325,11 @@ function getActiveDockIndex() {
 
 function updateDockIndicator() {
   if (!els.dockIndicator) return;
+  if (isSearchPanelOpen()) {
+    els.bottomDock.style.setProperty("--dock-indicator-opacity", "0");
+    return;
+  }
+
   const index = getActiveDockIndex();
   if (index < 0) {
     els.bottomDock.style.setProperty("--dock-indicator-opacity", "0");
@@ -339,6 +356,7 @@ function handleDockClickCapture(event) {
 }
 
 function handleDockPointerDown(event) {
+  if (isSearchPanelOpen()) return;
   if (event.pointerType === "mouse" && event.button !== 0) return;
   dockDragState.pointerId = event.pointerId;
   dockDragState.startX = event.clientX;
@@ -348,6 +366,7 @@ function handleDockPointerDown(event) {
 }
 
 function handleDockPointerMove(event) {
+  if (isSearchPanelOpen()) return;
   if (event.pointerId !== dockDragState.pointerId) return;
 
   const deltaX = event.clientX - dockDragState.startX;
@@ -369,6 +388,7 @@ function handleDockPointerMove(event) {
 }
 
 function handleDockPointerUp(event) {
+  if (isSearchPanelOpen()) return;
   if (event.pointerId !== dockDragState.pointerId) return;
   const targetIndex = getNearestDockIndex(event.clientX);
   finishDockDrag(event);
