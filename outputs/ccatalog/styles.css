@@ -246,7 +246,10 @@ button {
 }
 
 .brand {
-  display: flex;
+  display: grid;
+  width: fit-content;
+  max-width: calc(100vw - 32px);
+  grid-template-columns: auto auto;
   align-items: center;
   gap: 12px;
   min-width: 0;
@@ -256,7 +259,10 @@ button {
 }
 
 .brand-copy {
+  display: grid;
+  place-items: center;
   min-width: 0;
+  text-align: center;
 }
 
 .brand-actions {
@@ -326,24 +332,13 @@ body.is-admin-mode .brand-add-button {
   line-height: 1;
 }
 
-.brand h1,
-.brand p {
-  margin: 0;
-}
-
 .brand h1 {
+  margin: 0;
   font-size: 21px;
   font-weight: 900;
   line-height: 1.05;
   letter-spacing: 0;
-}
-
-.brand p {
-  margin-top: 3px;
-  color: var(--soft-ink);
-  font-size: 11px;
-  font-weight: 700;
-  white-space: nowrap;
+  text-align: center;
 }
 
 .icon-button {
@@ -1562,10 +1557,6 @@ body.is-admin-mode .brand-add-button {
 
   .brand h1 {
     font-size: 18px;
-  }
-
-  .brand p {
-    font-size: 10px;
   }
 
   .brand-admin-button,

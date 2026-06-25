@@ -1029,13 +1029,13 @@ function normalizeMenuPrice(value) {
 }
 
 async function initializeMap() {
-  setProviderBadge("네이버 연결", "loading");
+  setProviderBadge("네이버지도 연결", "loading");
   state.map?.destroy?.();
   state.map = null;
 
   try {
     if (!runtimeConfig.naverMapKey) {
-      throw new Error("네이버 지도 키가 설정되지 않았습니다");
+      throw new Error("네이버지도 키가 설정되지 않았습니다");
     }
 
     const adapter = new NaverMapAdapter(els.map, els.mockMap, runtimeConfig.naverMapKey);
@@ -1045,7 +1045,7 @@ async function initializeMap() {
     console.warn("naver map failed", error);
     const fallback = new MockMapAdapter(els.map, els.mockMap, els.mockPins);
     await activateMap(fallback);
-    setProviderBadge("네이버 실패", "error");
+    setProviderBadge("네이버지도 실패", "error");
   }
 }
 
@@ -1194,7 +1194,7 @@ function renderSelectedCard(visibleRestaurants) {
       <div class="card-side">
         ${ratingBadge(restaurant.rating)}
         <div class="card-actions">
-          <a class="link-button" href="${naverLink}" target="_blank" rel="noreferrer">네이버</a>
+          <a class="link-button" href="${naverLink}" target="_blank" rel="noreferrer">네이버지도</a>
           ${editableActions}
         </div>
       </div>
@@ -1874,7 +1874,7 @@ class MockMapAdapter {
 class NaverMapAdapter {
   constructor(mapHost, mockMap, key) {
     this.type = "naver";
-    this.label = "네이버 지도";
+    this.label = "네이버지도";
     this.mapHost = mapHost;
     this.mockMap = mockMap;
     this.key = key;
@@ -1915,7 +1915,7 @@ class NaverMapAdapter {
         loadScript(src, () => Boolean(window.naver?.maps?.Map && window.naver.maps.LatLng), 8000, callbackName),
         new Promise((_, reject) => {
           window.navermap_authFailure = () => {
-            reject(new Error("네이버 지도 API 인증에 실패했습니다"));
+            reject(new Error("네이버지도 API 인증에 실패했습니다"));
           };
         }),
       ]);
