@@ -284,6 +284,8 @@ button {
   background: rgba(203, 238, 244, 0.62);
   box-shadow: 0 1px 0 rgba(17, 24, 32, 0.04);
   pointer-events: auto;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
   transition:
     width 220ms ease,
     margin 220ms ease,
@@ -309,12 +311,27 @@ button {
   transform: scale(0.82);
 }
 
-.brand-admin-button:hover,
 .brand-admin-button.is-active,
-.brand-add-button:hover,
 .brand-add-button.is-active {
   border-color: rgba(17, 24, 32, 0.16);
   background: rgba(17, 24, 32, 0.04);
+}
+
+.brand-admin-button:focus,
+.brand-admin-button:focus-visible,
+.brand-admin-button:active,
+.brand-add-button:focus,
+.brand-add-button:focus-visible,
+.brand-add-button:active {
+  outline: 0;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .brand-admin-button:hover,
+  .brand-add-button:hover {
+    border-color: rgba(17, 24, 32, 0.16);
+    background: rgba(17, 24, 32, 0.04);
+  }
 }
 
 body.is-admin-mode .brand-add-button {

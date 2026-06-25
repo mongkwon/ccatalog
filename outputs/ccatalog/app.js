@@ -217,8 +217,9 @@ function bindEvents() {
     setAdminMode(!state.isAdminMode);
   });
 
-  els.addButton.addEventListener("click", () => {
+  els.addButton.addEventListener("click", (event) => {
     if (!state.isAdminMode) return;
+    event.currentTarget.blur();
 
     if (isSpotDialogOpen()) {
       closeSpotDialog();
