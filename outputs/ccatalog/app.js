@@ -1,4 +1,5 @@
 const STORAGE_KEY = "ccatalog.restaurants.v1";
+const TUTORIAL_STORAGE_KEY = "ccatalog.tutorial.v1";
 const SUPABASE_SDK_URL = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
 const SUPABASE_TABLE = "restaurants";
 const RESTAURANT_PHOTO_BUCKET = "restaurant-photos";
@@ -43,6 +44,27 @@ const DELIVERY_APPS = [
   { id: "baemin", label: "배달의민족", shortLabel: "배민" },
   { id: "coupangEats", label: "쿠팡이츠", shortLabel: "쿠팡이츠" },
   { id: "yogiyo", label: "요기요", shortLabel: "요기요" },
+];
+
+const TUTORIAL_STEPS = [
+  {
+    target: "restaurantPanel",
+    placement: "top",
+    title: "맛집을 골라보세요",
+    description: "지도 핀이나 목록을 누르면 추천 메뉴와 사진을 확인할 수 있습니다.",
+  },
+  {
+    target: "bottomDock",
+    placement: "top",
+    title: "취향에 맞게 좁혀보세요",
+    description: "메달을 누르거나 슬라이더를 밀어 원하는 등급만 빠르게 볼 수 있습니다.",
+  },
+  {
+    target: "adminButton",
+    placement: "bottom",
+    title: "방문하고 까탈리스트가 되세요",
+    description: "로그인 후 세 곳에서 위치 인증과 등급 동의를 완료하면 새 맛집을 건의할 수 있습니다.",
+  },
 ];
 
 const seedRestaurants = [
@@ -128,6 +150,7 @@ const state = {
   proposalReviewBusyId: null,
   proposalReviewStatus: "",
   proposalReviewError: false,
+  tutorialStep: 0,
   store: null,
   auth: {
     status: "loading",
@@ -171,6 +194,7 @@ async function init() {
   await initializeDataStore();
   await initializeMap();
   render();
+  initializeTutorial();
 }
 
 async function loadRuntimeConfig() {
@@ -236,6 +260,15 @@ function cacheElements() {
   els.proposalReviewClose = document.getElementById("proposalReviewClose");
   els.proposalReviewList = document.getElementById("proposalReviewList");
   els.proposalReviewStatus = document.getElementById("proposalReviewStatus");
+  els.tutorialOverlay = document.getElementById("tutorialOverlay");
+  els.tutorialSpotlight = document.getElementById("tutorialSpotlight");
+  els.tutorialCard = document.getElementById("tutorialCard");
+  els.tutorialStep = document.getElementById("tutorialStep");
+  els.tutorialTitle = document.getElementById("tutorialTitle");
+  els.tutorialDescription = document.getElementById("tutorialDescription");
+  els.tutorialDots = document.getElementById("tutorialDots");
+  els.tutorialBack = document.getElementById("tutorialBack");
+  els.tutorialNext = document.getElementById("tutorialNext");
   els.nameInput = document.getElementById("nameInput");
   els.categoryInput = document.getElementById("categoryInput");
   els.areaInput = document.getElementById("areaInput");
@@ -316,7 +349,10 @@ function bindEvents() {
   els.bottomDock.addEventListener("pointermove", handleDockPointerMove);
   els.bottomDock.addEventListener("pointerup", handleDockPointerUp);
   els.bottomDock.addEventListener("pointercancel", cancelDockDrag);
-  window.addEventListener("resize", updateDockIndicator);
+  window.addEventListener("resize", () => {
+    updateDockIndicator();
+    updateTutorialLayout();
+  });
 
   document.addEventListener("keydown", (event) => {
     if (isPhotoViewerOpen() && event.key === "ArrowLeft") {
@@ -329,7 +365,9 @@ function bindEvents() {
     }
     if (event.key !== "Escape") return;
 
-    if (isPhotoViewerOpen()) {
+    if (isTutorialOpen()) {
+      closeTutorial();
+    } else if (isPhotoViewerOpen()) {
       closePhotoViewer();
     } else if (isProposalReviewDialogOpen()) {
       closeProposalReviewDialog();
@@ -389,6 +427,114 @@ function bindEvents() {
   });
   els.proposalReviewClose.addEventListener("click", closeProposalReviewDialog);
   els.proposalReviewList.addEventListener("click", handleProposalReviewClick);
+  els.tutorialOverlay.addEventListener("click", handleTutorialClick);
+}
+
+function initializeTutorial() {
+  const forceTutorial = new URLSearchParams(window.location.search).get("tutorial") === "1";
+  let hasCompletedTutorial = false;
+
+  try {
+    hasCompletedTutorial = localStorage.getItem(TUTORIAL_STORAGE_KEY) === "complete";
+  } catch {
+    hasCompletedTutorial = false;
+  }
+
+  if (hasCompletedTutorial && !forceTutorial) return;
+  window.setTimeout(openTutorial, 420);
+}
+
+function isTutorialOpen() {
+  return els.tutorialOverlay?.classList.contains("is-open");
+}
+
+function openTutorial() {
+  if (!els.tutorialOverlay || isTutorialOpen()) return;
+  closeFloatingPanels();
+  closeSelectedRestaurant();
+  setRestaurantPanelOpen(true);
+  state.tutorialStep = 0;
+  els.tutorialOverlay.setAttribute("aria-hidden", "false");
+  document.body.classList.add("is-tutorial-open");
+  renderTutorial();
+  window.requestAnimationFrame(() => {
+    els.tutorialOverlay.classList.add("is-open");
+    updateTutorialLayout();
+    els.tutorialNext.focus({ preventScroll: true });
+  });
+}
+
+function closeTutorial() {
+  if (!els.tutorialOverlay) return;
+  els.tutorialOverlay.classList.remove("is-open");
+  els.tutorialOverlay.setAttribute("aria-hidden", "true");
+  document.body.classList.remove("is-tutorial-open");
+  try {
+    localStorage.setItem(TUTORIAL_STORAGE_KEY, "complete");
+  } catch {
+    // The tutorial can still close when browser storage is unavailable.
+  }
+  els.adminButton.focus({ preventScroll: true });
+}
+
+function handleTutorialClick(event) {
+  const action = event.target.closest("[data-tutorial-action]")?.dataset.tutorialAction;
+  if (!action) return;
+
+  if (action === "close") {
+    closeTutorial();
+    return;
+  }
+
+  if (action === "back") {
+    state.tutorialStep = Math.max(0, state.tutorialStep - 1);
+    renderTutorial();
+    return;
+  }
+
+  if (state.tutorialStep >= TUTORIAL_STEPS.length - 1) {
+    closeTutorial();
+    return;
+  }
+
+  state.tutorialStep += 1;
+  renderTutorial();
+}
+
+function renderTutorial() {
+  const step = TUTORIAL_STEPS[state.tutorialStep];
+  if (!step) return;
+
+  els.tutorialStep.textContent = `${state.tutorialStep + 1} / ${TUTORIAL_STEPS.length}`;
+  els.tutorialTitle.textContent = step.title;
+  els.tutorialDescription.textContent = step.description;
+  els.tutorialBack.disabled = state.tutorialStep === 0;
+  els.tutorialNext.textContent = state.tutorialStep === TUTORIAL_STEPS.length - 1 ? "시작하기" : "다음";
+  els.tutorialDots.innerHTML = TUTORIAL_STEPS.map(
+    (_, index) => `<span class="${index === state.tutorialStep ? "is-active" : ""}" aria-hidden="true"></span>`
+  ).join("");
+  els.tutorialCard.dataset.placement = step.placement;
+  updateTutorialLayout();
+}
+
+function updateTutorialLayout() {
+  if (!isTutorialOpen()) return;
+  const step = TUTORIAL_STEPS[state.tutorialStep];
+  const target = step ? els[step.target] : null;
+  if (!target) return;
+
+  const rect = target.getBoundingClientRect();
+  const padding = step.target === "adminButton" ? 7 : 8;
+  const left = Math.max(8, rect.left - padding);
+  const top = Math.max(8, rect.top - padding);
+  const right = Math.min(window.innerWidth - 8, rect.right + padding);
+  const bottom = Math.min(window.innerHeight - 8, rect.bottom + padding);
+
+  els.tutorialSpotlight.style.left = `${left}px`;
+  els.tutorialSpotlight.style.top = `${top}px`;
+  els.tutorialSpotlight.style.width = `${Math.max(1, right - left)}px`;
+  els.tutorialSpotlight.style.height = `${Math.max(1, bottom - top)}px`;
+  els.tutorialSpotlight.style.borderRadius = step.target === "restaurantPanel" ? "34px" : "999px";
 }
 
 function setRestaurantPanelOpen(isOpen) {

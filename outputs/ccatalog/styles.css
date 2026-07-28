@@ -237,7 +237,8 @@ button {
 .restaurant-panel,
 .search-panel,
 .selected-card,
-.modal-card {
+.modal-card,
+.tutorial-card {
   position: relative;
   overflow: hidden;
   border: 1px solid var(--edge-soft);
@@ -253,7 +254,8 @@ button {
 .restaurant-panel::before,
 .search-panel::before,
 .selected-card::before,
-.modal-card::before {
+.modal-card::before,
+.tutorial-card::before {
   display: none;
 }
 
@@ -1620,6 +1622,178 @@ body.has-add-access .brand-add-button {
   margin: 1px 0 0;
   font-size: 21px;
   letter-spacing: 0;
+}
+
+.tutorial-overlay {
+  position: fixed;
+  z-index: 100;
+  inset: 0;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+  visibility: hidden;
+  touch-action: none;
+  transition:
+    opacity 220ms ease,
+    visibility 220ms ease;
+}
+
+.tutorial-overlay.is-open {
+  opacity: 1;
+  pointer-events: auto;
+  visibility: visible;
+}
+
+.tutorial-spotlight {
+  position: absolute;
+  z-index: 0;
+  border: 1px solid rgba(255, 255, 255, 0.62);
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 0 0 160vmax rgba(10, 18, 25, 0.48);
+  pointer-events: none;
+  transition:
+    left 360ms cubic-bezier(0.24, 0.58, 0.24, 1),
+    top 360ms cubic-bezier(0.24, 0.58, 0.24, 1),
+    width 360ms cubic-bezier(0.24, 0.58, 0.24, 1),
+    height 360ms cubic-bezier(0.24, 0.58, 0.24, 1),
+    border-radius 360ms ease;
+}
+
+.tutorial-card {
+  position: absolute;
+  z-index: 1;
+  left: 50%;
+  display: grid;
+  width: min(390px, calc(100vw - 32px));
+  gap: 18px;
+  padding: 18px;
+  border-radius: 28px;
+  background: rgba(246, 249, 251, 0.72);
+  transform: translateX(-50%) translateY(8px) scale(0.985);
+  transition:
+    top 360ms cubic-bezier(0.24, 0.58, 0.24, 1),
+    bottom 360ms cubic-bezier(0.24, 0.58, 0.24, 1),
+    transform 280ms cubic-bezier(0.24, 0.58, 0.24, 1);
+}
+
+.tutorial-overlay.is-open .tutorial-card {
+  transform: translateX(-50%) translateY(0) scale(1);
+}
+
+.tutorial-card[data-placement="top"] {
+  top: max(92px, calc(env(safe-area-inset-top, 0px) + 72px));
+  bottom: auto;
+}
+
+.tutorial-card[data-placement="bottom"] {
+  top: auto;
+  bottom: calc(var(--dock-bottom) + env(safe-area-inset-bottom, 0px) + var(--dock-height) + 24px);
+}
+
+.tutorial-header,
+.tutorial-footer,
+.tutorial-actions {
+  display: flex;
+  align-items: center;
+}
+
+.tutorial-header,
+.tutorial-footer {
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.tutorial-header > span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.tutorial-header button,
+.tutorial-actions button {
+  border: 0;
+  color: var(--soft-ink);
+  background: transparent;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.tutorial-header button {
+  min-height: 30px;
+  padding: 0 2px 0 10px;
+}
+
+.tutorial-copy {
+  display: grid;
+  gap: 7px;
+}
+
+.tutorial-copy h2,
+.tutorial-copy p {
+  margin: 0;
+}
+
+.tutorial-copy h2 {
+  font-size: 20px;
+  line-height: 1.2;
+}
+
+.tutorial-copy p {
+  max-width: 330px;
+  color: var(--soft-ink);
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.55;
+}
+
+.tutorial-dots {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.tutorial-dots span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(17, 24, 32, 0.18);
+  transition:
+    width 220ms ease,
+    background 220ms ease;
+}
+
+.tutorial-dots span.is-active {
+  width: 18px;
+  border-radius: 999px;
+  background: rgba(17, 24, 32, 0.72);
+}
+
+.tutorial-actions {
+  gap: 6px;
+}
+
+.tutorial-actions button {
+  min-width: 56px;
+  min-height: 40px;
+  border-radius: 999px;
+  padding: 0 15px;
+}
+
+.tutorial-actions button:disabled {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.tutorial-actions .tutorial-next {
+  border: 1px solid rgba(17, 24, 32, 0.09);
+  color: var(--ink);
+  background: rgba(229, 233, 238, 0.72);
+}
+
+.tutorial-header button:focus-visible,
+.tutorial-actions button:focus-visible {
+  outline: 2px solid rgba(17, 24, 32, 0.38);
+  outline-offset: 2px;
 }
 
 .photo-modal-card {
