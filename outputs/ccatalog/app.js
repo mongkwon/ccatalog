@@ -1,6 +1,11 @@
 const STORAGE_KEY = "ccatalog.restaurants.v1";
 const SUPABASE_SDK_URL = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
 const SUPABASE_TABLE = "restaurants";
+const RESTAURANT_PHOTO_BUCKET = "restaurant-photos";
+const RESTAURANT_PHOTO_LIMIT = 8;
+const PHOTO_MAX_SOURCE_BYTES = 20 * 1024 * 1024;
+const PHOTO_MAX_DIMENSION = 1600;
+const PHOTO_JPEG_QUALITY = 0.84;
 const runtimeConfig = {
   naverMapKey: "",
   supabaseUrl: "",
@@ -114,6 +119,12 @@ const state = {
   lastMapCoord: DEFAULT_CENTER,
   placeSelection: null,
   spotDialogMode: "restaurant",
+  photoDialogRestaurantId: null,
+  photoManagerBusy: false,
+  photoManagerStatus: "",
+  photoManagerError: false,
+  photoViewerRestaurantId: null,
+  photoViewerIndex: 0,
   store: null,
   auth: {
     status: "loading",
@@ -199,6 +210,20 @@ function cacheElements() {
   els.spotForm = document.getElementById("spotForm");
   els.spotDialogTitle = document.getElementById("spotDialogTitle");
   els.spotSubmitButton = document.getElementById("spotSubmitButton");
+  els.photoDialog = document.getElementById("photoDialog");
+  els.photoDialogTitle = document.getElementById("photoDialogTitle");
+  els.photoDialogCount = document.getElementById("photoDialogCount");
+  els.photoDialogClose = document.getElementById("photoDialogClose");
+  els.photoManagerList = document.getElementById("photoManagerList");
+  els.photoManagerStatus = document.getElementById("photoManagerStatus");
+  els.photoUploadButton = document.getElementById("photoUploadButton");
+  els.photoUploadInput = document.getElementById("photoUploadInput");
+  els.photoViewer = document.getElementById("photoViewer");
+  els.photoViewerClose = document.getElementById("photoViewerClose");
+  els.photoViewerPrevious = document.getElementById("photoViewerPrevious");
+  els.photoViewerNext = document.getElementById("photoViewerNext");
+  els.photoViewerImage = document.getElementById("photoViewerImage");
+  els.photoViewerCaption = document.getElementById("photoViewerCaption");
   els.nameInput = document.getElementById("nameInput");
   els.categoryInput = document.getElementById("categoryInput");
   els.areaInput = document.getElementById("areaInput");
@@ -282,9 +307,21 @@ function bindEvents() {
   window.addEventListener("resize", updateDockIndicator);
 
   document.addEventListener("keydown", (event) => {
+    if (isPhotoViewerOpen() && event.key === "ArrowLeft") {
+      movePhotoViewer(-1);
+      return;
+    }
+    if (isPhotoViewerOpen() && event.key === "ArrowRight") {
+      movePhotoViewer(1);
+      return;
+    }
     if (event.key !== "Escape") return;
 
-    if (isSpotDialogOpen()) {
+    if (isPhotoViewerOpen()) {
+      closePhotoViewer();
+    } else if (isPhotoDialogOpen()) {
+      closePhotoDialog();
+    } else if (isSpotDialogOpen()) {
       closeSpotDialog();
     } else if (isSearchPanelOpen()) {
       setSearchPanelOpen(false);
@@ -325,6 +362,16 @@ function bindEvents() {
   });
 
   els.spotForm.addEventListener("submit", handleSpotSubmit);
+
+  els.photoDialogClose.addEventListener("click", closePhotoDialog);
+  els.photoUploadInput.addEventListener("change", handlePhotoUpload);
+  els.photoManagerList.addEventListener("click", handlePhotoManagerClick);
+  els.photoViewerClose.addEventListener("click", closePhotoViewer);
+  els.photoViewerPrevious.addEventListener("click", () => movePhotoViewer(-1));
+  els.photoViewerNext.addEventListener("click", () => movePhotoViewer(1));
+  els.photoViewer.addEventListener("click", (event) => {
+    if (event.target === els.photoViewer) closePhotoViewer();
+  });
 }
 
 function setRestaurantPanelOpen(isOpen) {
@@ -363,6 +410,9 @@ function setAccountMode(mode, { rerender = true } = {}) {
 
   if (state.accountMode !== nextMode && isSpotDialogOpen()) {
     closeSpotDialog({ restorePanel: !state.selectedId });
+  }
+  if (state.accountMode !== nextMode && isPhotoDialogOpen()) {
+    closePhotoDialog();
   }
 
   state.accountMode = nextMode;
@@ -1459,13 +1509,16 @@ function renderSelectedCard(visibleRestaurants) {
 
   const naverLink = `https://map.naver.com/p/search/${encodeURIComponent(restaurant.name)}`;
   const visitControl = renderVisitControl(restaurant);
+  const photoGallery = renderRestaurantPhotoGallery(restaurant);
   const editableActions = state.isAdminMode
     ? `
+          <button class="secondary-button" type="button" data-action="photos">사진</button>
           <button class="secondary-button" type="button" data-action="edit">수정</button>
           <button class="secondary-button danger-button" type="button" data-action="delete">삭제</button>
         `
     : "";
   els.selectedCard.innerHTML = `
+    ${photoGallery}
     <div class="card-layout">
       <div class="card-main">
         <h2>${escapeHtml(restaurant.name)}</h2>
@@ -1488,8 +1541,16 @@ function renderSelectedCard(visibleRestaurants) {
   els.selectedCard.querySelector('[data-action="edit"]')?.addEventListener("click", () => {
     openSpotDialog(restaurant);
   });
+  els.selectedCard.querySelector('[data-action="photos"]')?.addEventListener("click", () => {
+    openPhotoDialog(restaurant);
+  });
   els.selectedCard.querySelector('[data-action="delete"]')?.addEventListener("click", () => {
     deleteRestaurant(restaurant.id);
+  });
+  els.selectedCard.querySelectorAll("[data-photo-index]").forEach((button) => {
+    button.addEventListener("click", () => {
+      openPhotoViewer(restaurant, Number(button.dataset.photoIndex));
+    });
   });
   els.selectedCard.querySelector('[data-action="visit-login"]')?.addEventListener("click", () => {
     setAuthPanelOpen(true);
@@ -1503,6 +1564,317 @@ function renderSelectedCard(visibleRestaurants) {
     confirmRestaurantVisit(restaurant, visitButton);
   });
   els.selectedCard.classList.remove("hidden");
+}
+
+function renderRestaurantPhotoGallery(restaurant) {
+  const photos = normalizeRestaurantPhotos(restaurant.photos);
+  if (!photos.length) return "";
+
+  return `
+    <div class="restaurant-photo-gallery" data-count="${photos.length}" aria-label="${escapeHtml(restaurant.name)} 사진">
+      ${photos
+        .map(
+          (photo, index) => `
+            <button class="restaurant-photo-button" type="button" data-photo-index="${index}" aria-label="사진 ${index + 1} 크게 보기">
+              <img src="${escapeHtml(photo.url)}" alt="${escapeHtml(photo.altText || restaurant.name)}" loading="lazy" decoding="async" />
+            </button>
+          `
+        )
+        .join("")}
+    </div>
+  `;
+}
+
+function isPhotoDialogOpen() {
+  return els.photoDialog?.classList.contains("is-open");
+}
+
+function photoDialogRestaurant() {
+  return state.restaurants.find((restaurant) => restaurant.id === state.photoDialogRestaurantId) ?? null;
+}
+
+function openPhotoDialog(restaurant) {
+  if (!state.isAdminMode || !restaurant) return;
+  if (isSpotDialogOpen()) closeSpotDialog({ restorePanel: false });
+  closeFloatingPanels();
+  setAuthPanelOpen(false);
+  state.photoDialogRestaurantId = restaurant.id;
+  state.photoManagerBusy = false;
+  state.photoManagerStatus = "";
+  state.photoManagerError = false;
+  els.photoUploadInput.value = "";
+  renderPhotoManager();
+  els.photoDialog.setAttribute("aria-hidden", "false");
+  window.requestAnimationFrame(() => els.photoDialog.classList.add("is-open"));
+}
+
+function closePhotoDialog() {
+  if (!els.photoDialog) return;
+  els.photoDialog.classList.remove("is-open");
+  els.photoDialog.setAttribute("aria-hidden", "true");
+  state.photoDialogRestaurantId = null;
+  state.photoManagerBusy = false;
+  state.photoManagerStatus = "";
+  state.photoManagerError = false;
+  els.photoUploadInput.value = "";
+}
+
+function renderPhotoManager() {
+  const restaurant = photoDialogRestaurant();
+  if (!restaurant) return;
+
+  const photos = normalizeRestaurantPhotos(restaurant.photos);
+  els.photoDialogTitle.textContent = `${restaurant.name} 사진`;
+  els.photoDialogCount.textContent = `${photos.length} / ${RESTAURANT_PHOTO_LIMIT}`;
+  els.photoManagerStatus.textContent = state.photoManagerStatus;
+  els.photoManagerStatus.classList.toggle("is-error", state.photoManagerError);
+  const uploadDisabled = state.photoManagerBusy || photos.length >= RESTAURANT_PHOTO_LIMIT;
+  els.photoUploadInput.disabled = uploadDisabled;
+  els.photoUploadButton.classList.toggle("is-disabled", uploadDisabled);
+
+  if (!photos.length) {
+    els.photoManagerList.innerHTML = '<div class="photo-manager-empty">등록된 사진이 없습니다</div>';
+    return;
+  }
+
+  els.photoManagerList.innerHTML = photos
+    .map(
+      (photo, index) => `
+        <article class="photo-manager-item">
+          <img src="${escapeHtml(photo.url)}" alt="${escapeHtml(photo.altText || restaurant.name)}" />
+          <div class="photo-manager-actions">
+            <button type="button" data-photo-action="previous" data-photo-id="${photo.id}" aria-label="사진 앞으로 이동" title="앞으로" ${index === 0 || state.photoManagerBusy ? "disabled" : ""}>‹</button>
+            <button type="button" data-photo-action="next" data-photo-id="${photo.id}" aria-label="사진 뒤로 이동" title="뒤로" ${index === photos.length - 1 || state.photoManagerBusy ? "disabled" : ""}>›</button>
+            <button class="photo-delete-button" type="button" data-photo-action="delete" data-photo-id="${photo.id}" ${state.photoManagerBusy ? "disabled" : ""}>삭제</button>
+          </div>
+        </article>
+      `
+    )
+    .join("");
+}
+
+async function handlePhotoUpload(event) {
+  const restaurant = photoDialogRestaurant();
+  const selectedFiles = [...(event.target.files ?? [])];
+  if (!restaurant || !state.isAdminMode || state.photoManagerBusy || !selectedFiles.length) return;
+
+  const currentPhotos = normalizeRestaurantPhotos(restaurant.photos);
+  const availableSlots = RESTAURANT_PHOTO_LIMIT - currentPhotos.length;
+  const files = selectedFiles.slice(0, availableSlots);
+  if (!files.length) {
+    setPhotoManagerStatus("사진은 음식점마다 최대 8장까지 등록할 수 있습니다", true);
+    return;
+  }
+
+  state.photoManagerBusy = true;
+  state.photoManagerError = false;
+  renderPhotoManager();
+
+  const uploadedPhotos = [];
+  try {
+    for (let index = 0; index < files.length; index += 1) {
+      setPhotoManagerStatus(`${index + 1} / ${files.length} 사진 처리 중`, false);
+      const blob = await prepareRestaurantPhoto(files[index]);
+      const photo = await state.store.addRestaurantPhoto(restaurant, blob, currentPhotos.length + uploadedPhotos.length);
+      uploadedPhotos.push(photo);
+    }
+
+    restaurant.photos = normalizeRestaurantPhotos([...currentPhotos, ...uploadedPhotos]);
+    const omittedCount = selectedFiles.length - files.length;
+    setPhotoManagerStatus(omittedCount ? `사진을 추가했습니다 · ${omittedCount}장은 제한으로 제외됐습니다` : "사진을 추가했습니다", false);
+  } catch (error) {
+    console.warn("restaurant photo upload failed", error);
+    if (uploadedPhotos.length) {
+      restaurant.photos = normalizeRestaurantPhotos([...currentPhotos, ...uploadedPhotos]);
+    }
+    setPhotoManagerStatus(photoErrorMessage(error), true);
+  } finally {
+    state.photoManagerBusy = false;
+    els.photoUploadInput.value = "";
+    renderPhotoManager();
+    render();
+  }
+}
+
+async function handlePhotoManagerClick(event) {
+  const button = event.target.closest("[data-photo-action]");
+  const restaurant = photoDialogRestaurant();
+  if (!button || button.disabled || !restaurant || !state.isAdminMode || state.photoManagerBusy) return;
+
+  const photos = normalizeRestaurantPhotos(restaurant.photos);
+  const photoIndex = photos.findIndex((photo) => photo.id === button.dataset.photoId);
+  if (photoIndex < 0) return;
+  const action = button.dataset.photoAction;
+
+  if (action === "delete") {
+    if (!window.confirm("이 사진을 삭제할까요?")) return;
+    await deleteRestaurantPhoto(restaurant, photos[photoIndex]);
+    return;
+  }
+
+  const targetIndex = action === "previous" ? photoIndex - 1 : photoIndex + 1;
+  if (targetIndex < 0 || targetIndex >= photos.length) return;
+  const reorderedPhotos = [...photos];
+  [reorderedPhotos[photoIndex], reorderedPhotos[targetIndex]] = [reorderedPhotos[targetIndex], reorderedPhotos[photoIndex]];
+  await saveRestaurantPhotoOrder(restaurant, reorderedPhotos);
+}
+
+async function deleteRestaurantPhoto(restaurant, photo) {
+  state.photoManagerBusy = true;
+  setPhotoManagerStatus("사진 삭제 중", false);
+  renderPhotoManager();
+
+  try {
+    await state.store.removeRestaurantPhoto(photo);
+    restaurant.photos = normalizeRestaurantPhotos(restaurant.photos.filter((item) => item.id !== photo.id));
+    await state.store.updateRestaurantPhotoOrder(restaurant.photos);
+    restaurant.photos = restaurant.photos.map((item, index) => ({ ...item, sortOrder: index }));
+    setPhotoManagerStatus("사진을 삭제했습니다", false);
+  } catch (error) {
+    console.warn("restaurant photo delete failed", error);
+    setPhotoManagerStatus(photoErrorMessage(error), true);
+  } finally {
+    state.photoManagerBusy = false;
+    renderPhotoManager();
+    render();
+  }
+}
+
+async function saveRestaurantPhotoOrder(restaurant, photos) {
+  state.photoManagerBusy = true;
+  setPhotoManagerStatus("순서 변경 중", false);
+  renderPhotoManager();
+
+  try {
+    const orderedPhotos = photos.map((photo, index) => ({ ...photo, sortOrder: index }));
+    await state.store.updateRestaurantPhotoOrder(orderedPhotos);
+    restaurant.photos = orderedPhotos;
+    setPhotoManagerStatus("사진 순서를 변경했습니다", false);
+  } catch (error) {
+    console.warn("restaurant photo reorder failed", error);
+    setPhotoManagerStatus(photoErrorMessage(error), true);
+  } finally {
+    state.photoManagerBusy = false;
+    renderPhotoManager();
+    render();
+  }
+}
+
+function setPhotoManagerStatus(message, isError) {
+  state.photoManagerStatus = message;
+  state.photoManagerError = Boolean(isError);
+  if (!els.photoManagerStatus) return;
+  els.photoManagerStatus.textContent = message;
+  els.photoManagerStatus.classList.toggle("is-error", Boolean(isError));
+}
+
+function photoErrorMessage(error) {
+  const message = String(error?.message || "");
+  if (message.includes("restaurant_photo_limit")) return "사진은 음식점마다 최대 8장까지 등록할 수 있습니다";
+  if (message.includes("photo_file_too_large")) return "20MB 이하의 사진을 선택해주세요";
+  if (message.includes("photo_type_invalid")) return "이미지 파일만 등록할 수 있습니다";
+  if (message.includes("photo_decode_failed")) return "이 사진 형식은 현재 브라우저에서 처리할 수 없습니다";
+  return "사진을 처리하지 못했습니다. 잠시 후 다시 시도해주세요";
+}
+
+async function prepareRestaurantPhoto(file) {
+  if (!(file instanceof File) || !file.type.startsWith("image/")) throw new Error("photo_type_invalid");
+  if (file.size > PHOTO_MAX_SOURCE_BYTES) throw new Error("photo_file_too_large");
+
+  const imageSource = await decodePhotoFile(file);
+  const sourceWidth = Number(imageSource.width || imageSource.naturalWidth);
+  const sourceHeight = Number(imageSource.height || imageSource.naturalHeight);
+  if (!sourceWidth || !sourceHeight) {
+    imageSource.close?.();
+    throw new Error("photo_decode_failed");
+  }
+
+  const scale = Math.min(1, PHOTO_MAX_DIMENSION / Math.max(sourceWidth, sourceHeight));
+  const width = Math.max(1, Math.round(sourceWidth * scale));
+  const height = Math.max(1, Math.round(sourceHeight * scale));
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext("2d", { alpha: false });
+  if (!context) {
+    imageSource.close?.();
+    throw new Error("photo_decode_failed");
+  }
+
+  context.fillStyle = "#ffffff";
+  context.fillRect(0, 0, width, height);
+  context.drawImage(imageSource, 0, 0, width, height);
+  imageSource.close?.();
+
+  const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", PHOTO_JPEG_QUALITY));
+  if (!blob) throw new Error("photo_decode_failed");
+  return blob;
+}
+
+async function decodePhotoFile(file) {
+  if (typeof createImageBitmap === "function") {
+    try {
+      return await createImageBitmap(file, { imageOrientation: "from-image" });
+    } catch {
+      // Safari can decode some camera formats through an image element but not createImageBitmap.
+    }
+  }
+
+  const objectUrl = URL.createObjectURL(file);
+  try {
+    const image = new Image();
+    image.decoding = "async";
+    await new Promise((resolve, reject) => {
+      image.onload = resolve;
+      image.onerror = () => reject(new Error("photo_decode_failed"));
+      image.src = objectUrl;
+    });
+    return image;
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
+function isPhotoViewerOpen() {
+  return els.photoViewer?.classList.contains("is-open");
+}
+
+function openPhotoViewer(restaurant, index) {
+  const photos = normalizeRestaurantPhotos(restaurant?.photos);
+  if (!photos.length) return;
+  state.photoViewerRestaurantId = restaurant.id;
+  state.photoViewerIndex = Math.max(0, Math.min(photos.length - 1, index));
+  renderPhotoViewer();
+  els.photoViewer.setAttribute("aria-hidden", "false");
+  els.photoViewer.classList.add("is-open");
+}
+
+function closePhotoViewer() {
+  els.photoViewer.classList.remove("is-open");
+  els.photoViewer.setAttribute("aria-hidden", "true");
+  els.photoViewerImage.removeAttribute("src");
+  state.photoViewerRestaurantId = null;
+  state.photoViewerIndex = 0;
+}
+
+function movePhotoViewer(direction) {
+  const restaurant = state.restaurants.find((item) => item.id === state.photoViewerRestaurantId);
+  const photos = normalizeRestaurantPhotos(restaurant?.photos);
+  if (!photos.length) return;
+  state.photoViewerIndex = Math.max(0, Math.min(photos.length - 1, state.photoViewerIndex + direction));
+  renderPhotoViewer();
+}
+
+function renderPhotoViewer() {
+  const restaurant = state.restaurants.find((item) => item.id === state.photoViewerRestaurantId);
+  const photos = normalizeRestaurantPhotos(restaurant?.photos);
+  const photo = photos[state.photoViewerIndex];
+  if (!restaurant || !photo) return;
+  els.photoViewerImage.src = photo.url;
+  els.photoViewerImage.alt = photo.altText || restaurant.name;
+  els.photoViewerCaption.textContent = `${restaurant.name} · ${state.photoViewerIndex + 1} / ${photos.length}`;
+  els.photoViewerPrevious.disabled = state.photoViewerIndex === 0;
+  els.photoViewerNext.disabled = state.photoViewerIndex === photos.length - 1;
 }
 
 function renderVisitControl(restaurant) {
@@ -1630,6 +2002,7 @@ function visitErrorMessage(error) {
 }
 
 function selectRestaurant(id, { closePanel = false } = {}) {
+  if (isPhotoDialogOpen()) closePhotoDialog();
   if (closePanel) {
     closeFloatingPanels();
   }
@@ -1745,6 +2118,7 @@ async function handleSpotSubmit(event) {
     }
 
     const savedRestaurant = await saveRestaurant(nextRestaurant, { isNew: !existingRestaurant });
+    savedRestaurant.photos = normalizeRestaurantPhotos(existingRestaurant?.photos);
     const existingIndex = state.restaurants.findIndex((restaurant) => restaurant.id === savedRestaurant.id);
     if (existingIndex >= 0) {
       state.restaurants.splice(existingIndex, 1, savedRestaurant);
@@ -1780,6 +2154,7 @@ async function deleteRestaurant(id) {
   if (!window.confirm(`${restaurant.name}을 삭제할까요?`)) return;
 
   try {
+    if (state.photoDialogRestaurantId === id) closePhotoDialog();
     await removeRestaurant(id);
     state.restaurants = state.restaurants.filter((item) => item.id !== id);
     if (state.selectedId === id) {
@@ -2081,14 +2456,33 @@ class SupabaseRestaurantStore {
   }
 
   async list() {
-    const { data, error } = await this.client
-      .from(SUPABASE_TABLE)
-      .select(RESTAURANT_SELECT_COLUMNS)
-      .order("rating", { ascending: false })
-      .order("name", { ascending: true });
+    const [restaurantResult, photoResult] = await Promise.all([
+      this.client
+        .from(SUPABASE_TABLE)
+        .select(RESTAURANT_SELECT_COLUMNS)
+        .order("rating", { ascending: false })
+        .order("name", { ascending: true }),
+      this.client
+        .from("restaurant_photos")
+        .select("id,restaurant_id,storage_path,alt_text,sort_order,created_at")
+        .order("restaurant_id", { ascending: true })
+        .order("sort_order", { ascending: true })
+        .order("created_at", { ascending: true }),
+    ]);
 
-    if (error) throw error;
-    return (data ?? []).map(rowToRestaurant).filter(Boolean);
+    if (restaurantResult.error) throw restaurantResult.error;
+    if (photoResult.error) throw photoResult.error;
+
+    const photosByRestaurant = new Map();
+    (photoResult.data ?? []).forEach((row) => {
+      const photos = photosByRestaurant.get(row.restaurant_id) ?? [];
+      photos.push(photoRowToPhoto(row, this.restaurantPhotoUrl(row.storage_path)));
+      photosByRestaurant.set(row.restaurant_id, photos);
+    });
+
+    return (restaurantResult.data ?? [])
+      .map((row) => rowToRestaurant(row, photosByRestaurant.get(row.id) ?? []))
+      .filter(Boolean);
   }
 
   async save(restaurant, { isNew } = {}) {
@@ -2107,8 +2501,70 @@ class SupabaseRestaurantStore {
   }
 
   async remove(id) {
+    const { data: photos, error: photoQueryError } = await this.client
+      .from("restaurant_photos")
+      .select("storage_path")
+      .eq("restaurant_id", id);
+    if (photoQueryError) throw photoQueryError;
+
+    const paths = (photos ?? []).map((photo) => photo.storage_path);
+    if (paths.length) {
+      const { error: storageError } = await this.client.storage.from(RESTAURANT_PHOTO_BUCKET).remove(paths);
+      if (storageError) throw storageError;
+    }
+
     const { error } = await this.client.from(SUPABASE_TABLE).delete().eq("id", id);
     if (error) throw error;
+  }
+
+  restaurantPhotoUrl(storagePath) {
+    return this.client.storage.from(RESTAURANT_PHOTO_BUCKET).getPublicUrl(storagePath).data.publicUrl;
+  }
+
+  async addRestaurantPhoto(restaurant, blob, sortOrder) {
+    if (!this.userId) throw new Error("not_authenticated");
+    const storagePath = `${restaurant.id}/${createId()}.jpg`;
+    const { error: uploadError } = await this.client.storage.from(RESTAURANT_PHOTO_BUCKET).upload(storagePath, blob, {
+      cacheControl: "31536000",
+      contentType: "image/jpeg",
+      upsert: false,
+    });
+    if (uploadError) throw uploadError;
+
+    const { data, error } = await this.client
+      .from("restaurant_photos")
+      .insert({
+        restaurant_id: restaurant.id,
+        storage_path: storagePath,
+        alt_text: restaurant.name,
+        sort_order: sortOrder,
+        created_by: this.userId,
+      })
+      .select("id,restaurant_id,storage_path,alt_text,sort_order,created_at")
+      .single();
+
+    if (error) {
+      await this.client.storage.from(RESTAURANT_PHOTO_BUCKET).remove([storagePath]);
+      throw error;
+    }
+
+    return photoRowToPhoto(data, this.restaurantPhotoUrl(storagePath));
+  }
+
+  async removeRestaurantPhoto(photo) {
+    const { error: storageError } = await this.client.storage.from(RESTAURANT_PHOTO_BUCKET).remove([photo.storagePath]);
+    if (storageError) throw storageError;
+
+    const { error: rowError } = await this.client.from("restaurant_photos").delete().eq("id", photo.id);
+    if (rowError) throw rowError;
+  }
+
+  async updateRestaurantPhotoOrder(photos) {
+    const results = await Promise.all(
+      photos.map((photo, index) => this.client.from("restaurant_photos").update({ sort_order: index }).eq("id", photo.id))
+    );
+    const failedResult = results.find((result) => result.error);
+    if (failedResult?.error) throw failedResult.error;
   }
 }
 
@@ -2128,7 +2584,7 @@ const RESTAURANT_SELECT_COLUMNS = [
   "updated_at",
 ].join(",");
 
-function rowToRestaurant(row) {
+function rowToRestaurant(row, photos = []) {
   return normalizeRestaurant({
     id: row.id,
     name: row.name,
@@ -2141,6 +2597,19 @@ function rowToRestaurant(row) {
     menuItems: row.menu_items,
     deliveryApps: row.delivery_apps,
     memo: row.memo,
+    photos,
+  });
+}
+
+function photoRowToPhoto(row, url) {
+  return normalizeRestaurantPhoto({
+    id: row.id,
+    restaurantId: row.restaurant_id,
+    storagePath: row.storage_path,
+    altText: row.alt_text,
+    sortOrder: row.sort_order,
+    createdAt: row.created_at,
+    url,
   });
 }
 
@@ -2213,6 +2682,32 @@ function normalizeRestaurant(item) {
     menuItems,
     deliveryApps: normalizeDeliveryApps(item.deliveryApps),
     memo: String(item.memo || ""),
+    photos: normalizeRestaurantPhotos(item.photos),
+  };
+}
+
+function normalizeRestaurantPhotos(value) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map(normalizeRestaurantPhoto)
+    .filter(Boolean)
+    .sort((a, b) => a.sortOrder - b.sortOrder || a.createdAt.localeCompare(b.createdAt));
+}
+
+function normalizeRestaurantPhoto(photo) {
+  if (!photo || typeof photo !== "object") return null;
+  const id = String(photo.id || "");
+  const url = String(photo.url || "");
+  const storagePath = String(photo.storagePath || photo.storage_path || "");
+  if (!id || !url || !storagePath) return null;
+  return {
+    id,
+    restaurantId: String(photo.restaurantId || photo.restaurant_id || ""),
+    storagePath,
+    altText: String(photo.altText || photo.alt_text || ""),
+    sortOrder: Number.isInteger(Number(photo.sortOrder ?? photo.sort_order)) ? Number(photo.sortOrder ?? photo.sort_order) : 0,
+    createdAt: String(photo.createdAt || photo.created_at || ""),
+    url,
   };
 }
 
