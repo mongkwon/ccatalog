@@ -9,23 +9,27 @@
     <meta name="theme-color" content="#eef4f8" />
     <meta name="apple-mobile-web-app-title" content="까탈로그" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" />
-    <link rel="stylesheet" href="./styles.css?v=20260729-svg-liquid-glass" />
-    <script defer src="./app.js?v=20260729-svg-liquid-glass"></script>
+    <link rel="stylesheet" href="./styles.css?v=20260729-precision-liquid-glass" />
+    <script defer src="./app.js?v=20260729-precision-liquid-glass"></script>
   </head>
   <body>
     <svg class="svg-filter-definitions" width="0" height="0" aria-hidden="true" focusable="false">
       <defs>
-        <filter id="dock-glass-refraction" x="-20%" y="-35%" width="140%" height="170%" color-interpolation-filters="sRGB">
-          <feTurbulence type="fractalNoise" baseFrequency="0.008 0.052" numOctaves="1" seed="19" result="glassNoise" />
-          <feGaussianBlur in="glassNoise" stdDeviation="0.65" result="softNoise" />
-          <feDisplacementMap in="SourceGraphic" in2="softNoise" scale="5" xChannelSelector="R" yChannelSelector="B" result="refracted" />
-          <feColorMatrix in="refracted" type="saturate" values="1.18" />
+        <filter id="dock-glass-refraction" filterUnits="userSpaceOnUse" primitiveUnits="userSpaceOnUse" x="0" y="0" width="1" height="1" color-interpolation-filters="sRGB">
+          <feImage id="dockGlassMap" x="0" y="0" width="1" height="1" preserveAspectRatio="none" result="displacementMap" />
+          <feGaussianBlur in="SourceGraphic" stdDeviation="0.16" result="softSource" />
+          <feDisplacementMap id="dockGlassDisplacement" in="softSource" in2="displacementMap" scale="18" xChannelSelector="R" yChannelSelector="G" result="refracted" />
+          <feColorMatrix in="refracted" type="saturate" values="1.24" result="saturated" />
+          <feImage id="dockGlassSpecular" x="0" y="0" width="1" height="1" preserveAspectRatio="none" result="specularMap" />
+          <feBlend in="saturated" in2="specularMap" mode="screen" />
         </filter>
-        <filter id="dock-glass-refraction-active" x="-28%" y="-60%" width="156%" height="220%" color-interpolation-filters="sRGB">
-          <feTurbulence type="fractalNoise" baseFrequency="0.006 0.038" numOctaves="1" seed="23" result="glassNoiseActive" />
-          <feGaussianBlur in="glassNoiseActive" stdDeviation="0.85" result="softNoiseActive" />
-          <feDisplacementMap in="SourceGraphic" in2="softNoiseActive" scale="13" xChannelSelector="R" yChannelSelector="B" result="refractedActive" />
-          <feColorMatrix in="refractedActive" type="saturate" values="1.3" />
+        <filter id="dock-glass-refraction-active" filterUnits="userSpaceOnUse" primitiveUnits="userSpaceOnUse" x="0" y="0" width="1" height="1" color-interpolation-filters="sRGB">
+          <feImage id="dockGlassMapActive" x="0" y="0" width="1" height="1" preserveAspectRatio="none" result="displacementMapActive" />
+          <feGaussianBlur in="SourceGraphic" stdDeviation="0.22" result="softSourceActive" />
+          <feDisplacementMap id="dockGlassDisplacementActive" in="softSourceActive" in2="displacementMapActive" scale="30" xChannelSelector="R" yChannelSelector="G" result="refractedActive" />
+          <feColorMatrix in="refractedActive" type="saturate" values="1.38" result="saturatedActive" />
+          <feImage id="dockGlassSpecularActive" x="0" y="0" width="1" height="1" preserveAspectRatio="none" result="specularMapActive" />
+          <feBlend in="saturatedActive" in2="specularMapActive" mode="screen" />
         </filter>
       </defs>
     </svg>
