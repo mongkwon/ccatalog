@@ -19,6 +19,7 @@ const INITIAL_REVEAL_BOUNDS_OPTIONS = {
 };
 const USER_LOCATION_TIMEOUT_MS = 7000;
 const USER_LOCATION_MAX_AGE_MS = 5 * 60 * 1000;
+const VISIT_LOCATION_TIMEOUT_MS = 12000;
 const MOCK_BOUNDS = {
   latMin: 37.47,
   latMax: 37.62,
@@ -117,6 +118,8 @@ const state = {
     user: null,
     profile: null,
     isAdmin: false,
+    visitedRestaurantIds: [],
+    visitCount: 0,
     error: "",
   },
 };
@@ -462,7 +465,7 @@ function renderAuthPanel() {
       <span class="member-avatar">${avatar}</span>
       <span class="member-copy">
         <strong>${escapeHtml(memberDisplayName())}</strong>
-        <small>${roleLabel}</small>
+        <small>${roleLabel} · 방문 ${state.auth.visitCount}곳</small>
       </span>
     </div>
     <div class="auth-panel-actions">
@@ -526,6 +529,8 @@ async function syncAuthState(store) {
     state.auth.user = memberContext.user;
     state.auth.profile = memberContext.profile;
     state.auth.isAdmin = memberContext.isAdmin;
+    state.auth.visitedRestaurantIds = memberContext.visitedRestaurantIds;
+    state.auth.visitCount = memberContext.visitCount;
     if (!memberContext.isAdmin) {
       setAdminMode(false, { rerender: false });
     }
@@ -536,6 +541,8 @@ async function syncAuthState(store) {
     state.auth.user = null;
     state.auth.profile = null;
     state.auth.isAdmin = false;
+    state.auth.visitedRestaurantIds = [];
+    state.auth.visitCount = 0;
     state.auth.error = "회원 정보를 불러오지 못했습니다";
     setAdminMode(false, { rerender: false });
   }
@@ -1369,6 +1376,7 @@ function renderSelectedCard(visibleRestaurants) {
   }
 
   const naverLink = `https://map.naver.com/p/search/${encodeURIComponent(restaurant.name)}`;
+  const visitControl = renderVisitControl(restaurant);
   const editableActions = state.isAdminMode
     ? `
           <button class="secondary-button" type="button" data-action="edit">수정</button>
@@ -1383,6 +1391,7 @@ function renderSelectedCard(visibleRestaurants) {
         ${menuChips(restaurant.menuItems)}
         ${deliveryChips(restaurant.deliveryApps)}
         ${restaurant.memo ? `<p class="memo">${escapeHtml(restaurant.memo)}</p>` : ""}
+        ${visitControl}
       </div>
       <div class="card-side">
         ${ratingBadge(restaurant.rating)}
@@ -1400,7 +1409,137 @@ function renderSelectedCard(visibleRestaurants) {
   els.selectedCard.querySelector('[data-action="delete"]')?.addEventListener("click", () => {
     deleteRestaurant(restaurant.id);
   });
+  els.selectedCard.querySelector('[data-action="visit-login"]')?.addEventListener("click", () => {
+    setAuthPanelOpen(true);
+  });
+  const visitAgreement = els.selectedCard.querySelector("[data-visit-agreement]");
+  const visitButton = els.selectedCard.querySelector('[data-action="confirm-visit"]');
+  visitAgreement?.addEventListener("change", () => {
+    if (visitButton) visitButton.disabled = !visitAgreement.checked;
+  });
+  visitButton?.addEventListener("click", () => {
+    confirmRestaurantVisit(restaurant, visitButton);
+  });
   els.selectedCard.classList.remove("hidden");
+}
+
+function renderVisitControl(restaurant) {
+  if (!isMemberSignedIn()) {
+    return `
+      <div class="visit-verification">
+        <button class="visit-login-button" type="button" data-action="visit-login">로그인 후 방문 인증</button>
+      </div>
+    `;
+  }
+
+  if (state.auth.visitedRestaurantIds.includes(restaurant.id)) {
+    return `
+      <div class="visit-verification is-confirmed">
+        <span class="visit-confirmed-label">방문 확인됨</span>
+      </div>
+    `;
+  }
+
+  const rating = RATING_META[restaurant.rating];
+  return `
+    <div class="visit-verification">
+      <div class="visit-action-row">
+        <label class="visit-agreement">
+          <input type="checkbox" data-visit-agreement />
+          <span>${escapeHtml(`${rating.icon} ${rating.label} 평가에 동의`)}</span>
+        </label>
+        <button class="visit-confirm-button" type="button" data-action="confirm-visit" disabled>방문 인증</button>
+      </div>
+      <p class="visit-feedback" aria-live="polite"></p>
+    </div>
+  `;
+}
+
+async function confirmRestaurantVisit(restaurant, button) {
+  if (!isMemberSignedIn() || typeof state.store?.confirmRestaurantVisit !== "function") {
+    setAuthPanelOpen(true);
+    return;
+  }
+
+  const container = button.closest(".visit-verification");
+  const agreement = container?.querySelector("[data-visit-agreement]");
+  const feedback = container?.querySelector(".visit-feedback");
+  if (!agreement?.checked || !feedback) return;
+
+  button.disabled = true;
+  agreement.disabled = true;
+  button.textContent = "위치 확인 중";
+  feedback.textContent = "현재 위치를 확인하고 있습니다";
+  feedback.classList.remove("is-error");
+
+  try {
+    const location = await getVisitVerificationLocation();
+    if (location.error) throw new Error(location.error);
+
+    button.textContent = "확인 중";
+    feedback.textContent = "음식점과의 거리를 확인하고 있습니다";
+    const result = await state.store.confirmRestaurantVisit(restaurant, location.coords);
+
+    state.auth.visitedRestaurantIds = [...state.auth.visitedRestaurantIds, restaurant.id];
+    state.auth.visitCount = result.visit_count;
+    if (state.auth.profile) {
+      state.auth.profile = { ...state.auth.profile, is_catalist: result.is_catalist };
+    }
+    renderAuthPanel();
+    render();
+  } catch (error) {
+    console.warn("visit confirmation failed", error);
+    feedback.textContent = visitErrorMessage(error);
+    feedback.classList.add("is-error");
+    button.textContent = "방문 인증";
+    agreement.disabled = false;
+    button.disabled = !agreement.checked;
+  }
+}
+
+function getVisitVerificationLocation() {
+  if (!navigator.geolocation) {
+    return Promise.resolve({ error: "location_unsupported" });
+  }
+
+  return new Promise((resolve) => {
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const coords = {
+          lat: Number(position.coords.latitude),
+          lng: Number(position.coords.longitude),
+          accuracy: Number(position.coords.accuracy),
+        };
+        if (!isValidCoordinate(coords) || !Number.isFinite(coords.accuracy)) {
+          resolve({ error: "invalid_location" });
+          return;
+        }
+        resolve({ coords });
+      },
+      (error) => {
+        const errorCode = error.code === 1 ? "location_denied" : error.code === 3 ? "location_timeout" : "location_unavailable";
+        resolve({ error: errorCode });
+      },
+      {
+        enableHighAccuracy: true,
+        maximumAge: 0,
+        timeout: VISIT_LOCATION_TIMEOUT_MS,
+      }
+    );
+  });
+}
+
+function visitErrorMessage(error) {
+  const message = String(error?.message || "");
+  if (message.includes("location_denied")) return "위치 권한을 허용해야 방문을 인증할 수 있습니다";
+  if (message.includes("location_timeout")) return "위치 확인 시간이 초과됐습니다. 다시 시도해주세요";
+  if (message.includes("location_unavailable") || message.includes("location_unsupported")) return "현재 위치를 확인할 수 없습니다";
+  if (message.includes("location_inaccurate")) return "위치 정확도가 낮습니다. 창가나 야외에서 다시 시도해주세요";
+  if (message.includes("too_far")) return "음식점에서 200m 이내일 때 인증할 수 있습니다";
+  if (message.includes("already_confirmed")) return "이미 방문 인증한 음식점입니다";
+  if (message.includes("rating_changed")) return "등급이 변경됐습니다. 상세 정보를 다시 확인해주세요";
+  if (message.includes("agreement_required")) return "현재 메달 평가에 동의해주세요";
+  return "방문을 인증하지 못했습니다. 잠시 후 다시 시도해주세요";
 }
 
 function selectRestaurant(id, { closePanel = false } = {}) {
@@ -1743,21 +1882,27 @@ class SupabaseRestaurantStore {
   async getMemberContext() {
     const user = this.session?.user ?? null;
     if (!user || user.is_anonymous) {
-      return { user: null, profile: null, isAdmin: false };
+      return { user: null, profile: null, isAdmin: false, visitedRestaurantIds: [], visitCount: 0 };
     }
 
-    const [profileResult, adminResult] = await Promise.all([
+    const [profileResult, adminResult, visitsResult] = await Promise.all([
       this.client.from("profiles").select("id,nickname,avatar_url,is_catalist,catalist_qualified_at").eq("id", user.id).maybeSingle(),
       this.client.from("admin_users").select("user_id").eq("user_id", user.id).maybeSingle(),
+      this.client.from("restaurant_visits").select("restaurant_id").order("agreed_at", { ascending: true }),
     ]);
 
     if (profileResult.error) throw profileResult.error;
     if (adminResult.error) throw adminResult.error;
+    if (visitsResult.error) throw visitsResult.error;
+
+    const visitedRestaurantIds = (visitsResult.data ?? []).map((visit) => visit.restaurant_id);
 
     return {
       user,
       profile: profileResult.data,
       isAdmin: Boolean(adminResult.data),
+      visitedRestaurantIds,
+      visitCount: visitedRestaurantIds.length,
     };
   }
 
@@ -1775,6 +1920,20 @@ class SupabaseRestaurantStore {
   async signOut() {
     const { error } = await this.client.auth.signOut({ scope: "local" });
     if (error) throw error;
+  }
+
+  async confirmRestaurantVisit(restaurant, coords) {
+    const { data, error } = await this.client.rpc("confirm_restaurant_visit", {
+      p_restaurant_id: restaurant.id,
+      p_rating: restaurant.rating,
+      p_agrees: true,
+      p_lat: coords.lat,
+      p_lng: coords.lng,
+      p_accuracy: coords.accuracy,
+    });
+    if (error) throw error;
+    if (!data?.[0]) throw new Error("visit_result_missing");
+    return data[0];
   }
 
   async list() {

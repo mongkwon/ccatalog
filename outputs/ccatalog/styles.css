@@ -921,6 +921,95 @@ body.is-admin-mode .brand-add-button {
   line-height: 1.55;
 }
 
+.visit-verification {
+  margin-top: 12px;
+}
+
+.visit-action-row {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 7px;
+}
+
+.visit-agreement {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 7px;
+  color: var(--soft-ink);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.visit-agreement input {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  margin: 0;
+  accent-color: #66727b;
+}
+
+.visit-agreement span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.visit-confirm-button,
+.visit-login-button,
+.visit-confirmed-label {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(17, 24, 32, 0.1);
+  border-radius: 999px;
+  padding: 0 11px;
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.3);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.visit-confirm-button {
+  flex: 0 0 auto;
+}
+
+.visit-confirm-button:disabled {
+  cursor: default;
+  opacity: 0.44;
+}
+
+.visit-login-button {
+  width: 100%;
+}
+
+.visit-confirmed-label {
+  border-color: rgba(72, 112, 97, 0.16);
+  color: #355f50;
+  background: rgba(222, 239, 232, 0.42);
+}
+
+.visit-feedback {
+  margin-top: 6px !important;
+  color: var(--soft-ink);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.visit-feedback:empty {
+  display: none;
+}
+
+.visit-feedback.is-error {
+  color: var(--danger);
+}
+
 .card-actions {
   display: grid;
   gap: 6px;
