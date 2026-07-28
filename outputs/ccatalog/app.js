@@ -103,7 +103,7 @@ const seedRestaurants = [
 ];
 
 const state = {
-  restaurants: structuredClone(seedRestaurants),
+  restaurants: structuredClone(seedRestaurants).map(normalizeRestaurant).filter(Boolean),
   selectedId: null,
   query: "",
   filter: "all",
@@ -488,7 +488,10 @@ async function handleAuthPanelClick(event) {
 
   try {
     if (action === "kakao") {
-      await state.store?.signInWithKakao?.();
+      if (typeof state.store?.signInWithKakao !== "function") {
+        throw new Error("auth unavailable");
+      }
+      await state.store.signInWithKakao();
     } else if (action === "logout") {
       await state.store?.signOut?.();
       setAuthPanelOpen(false);
@@ -505,6 +508,7 @@ async function handleAuthPanelClick(event) {
 function authErrorMessage(error) {
   const message = String(error?.message || "");
   if (/provider.*disabled/i.test(message)) return "카카오 로그인 설정이 아직 완료되지 않았습니다";
+  if (/auth unavailable/i.test(message)) return "회원 연결을 준비하지 못했습니다. 새로고침해주세요";
   return "로그인을 완료하지 못했습니다. 잠시 후 다시 시도해주세요";
 }
 
@@ -1304,8 +1308,8 @@ function getVisibleRestaurants() {
         restaurant.category,
         restaurant.area,
         restaurant.memo,
-        ...restaurant.menus,
-        ...restaurant.menuItems.map((item) => item.price),
+        ...(restaurant.menus ?? []),
+        ...(restaurant.menuItems ?? []).map((item) => item.price),
         ...deliveryLabels(restaurant.deliveryApps),
       ]
         .join(" ")
