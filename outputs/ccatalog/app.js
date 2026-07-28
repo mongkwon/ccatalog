@@ -108,6 +108,7 @@ const state = {
   selectedId: null,
   query: "",
   filter: "all",
+  accountMode: "member",
   isAdminMode: false,
   map: null,
   lastMapCoord: DEFAULT_CENTER,
@@ -356,15 +357,17 @@ function setSearchPanelOpen(isOpen) {
   }
 }
 
-function setAdminMode(isEnabled, { rerender = true } = {}) {
-  const nextValue = Boolean(isEnabled && state.auth.isAdmin);
+function setAccountMode(mode, { rerender = true } = {}) {
+  const fallbackMode = state.auth.profile?.is_catalist ? "catalist" : "member";
+  const nextMode = state.auth.isAdmin && ["member", "catalist", "admin"].includes(mode) ? mode : fallbackMode;
 
-  if (!nextValue && isSpotDialogOpen()) {
+  if (state.accountMode !== nextMode && isSpotDialogOpen()) {
     closeSpotDialog({ restorePanel: !state.selectedId });
   }
 
-  state.isAdminMode = nextValue;
-  document.body.classList.toggle("is-admin-mode", nextValue);
+  state.accountMode = nextMode;
+  state.isAdminMode = nextMode === "admin";
+  document.body.classList.toggle("is-admin-mode", state.isAdminMode);
   updateAddButtonAccess();
 
   renderAuthPanel();
@@ -375,7 +378,15 @@ function setAdminMode(isEnabled, { rerender = true } = {}) {
 }
 
 function isCatalist() {
-  return Boolean(isMemberSignedIn() && state.auth.profile?.is_catalist);
+  if (!isMemberSignedIn()) return false;
+  if (state.auth.isAdmin) return state.accountMode === "catalist";
+  return Boolean(state.auth.profile?.is_catalist);
+}
+
+function accountModeLabel() {
+  if (state.accountMode === "admin") return "관리자";
+  if (state.accountMode === "catalist") return "까탈리스트";
+  return "일반회원";
 }
 
 function updateAddButtonAccess() {
@@ -454,7 +465,7 @@ function renderMemberProposals() {
 
 function renderAuthButton() {
   const isMember = isMemberSignedIn();
-  const label = !isMember ? "로그인" : state.auth.isAdmin ? "관리자" : "회원";
+  const label = !isMember ? "로그인" : state.auth.isAdmin ? accountModeLabel() : state.auth.profile?.is_catalist ? "까탈리스트" : "회원";
   els.adminButton.textContent = label;
   els.adminButton.title = isMember ? "내 계정" : "로그인";
   els.adminButton.setAttribute("aria-label", isMember ? `${memberDisplayName()} 계정` : "로그인");
@@ -498,12 +509,27 @@ function renderAuthPanel() {
   const avatar = avatarUrl
     ? `<img src="${escapeHtml(avatarUrl)}" alt="" referrerpolicy="no-referrer" />`
     : `<span aria-hidden="true">${escapeHtml(memberDisplayName().slice(0, 1))}</span>`;
-  const roleLabel = state.auth.isAdmin ? "관리자" : state.auth.profile?.is_catalist ? "까탈리스트" : "회원";
+  const roleLabel = state.auth.isAdmin ? `관리자 계정 · ${accountModeLabel()} 모드` : state.auth.profile?.is_catalist ? "까탈리스트" : "회원";
   const adminControl = state.auth.isAdmin
     ? `
-      <button class="auth-secondary-button" type="button" data-auth-action="admin-mode" aria-pressed="${state.isAdminMode}">
-        ${state.isAdminMode ? "관리자 모드 종료" : "관리자 모드"}
-      </button>
+      <div class="account-mode-control" role="group" aria-label="사용 모드">
+        ${[
+          ["member", "일반회원"],
+          ["catalist", "까탈리스트"],
+          ["admin", "관리자"],
+        ]
+          .map(
+            ([mode, label]) => `
+              <button
+                class="account-mode-option${state.accountMode === mode ? " is-active" : ""}"
+                type="button"
+                data-account-mode="${mode}"
+                aria-pressed="${state.accountMode === mode}"
+              >${label}</button>
+            `
+          )
+          .join("")}
+      </div>
     `
     : "";
 
@@ -525,15 +551,16 @@ function renderAuthPanel() {
 }
 
 async function handleAuthPanelClick(event) {
+  const modeButton = event.target.closest("[data-account-mode]");
+  if (modeButton && !modeButton.disabled) {
+    setAccountMode(modeButton.dataset.accountMode);
+    return;
+  }
+
   const button = event.target.closest("[data-auth-action]");
   if (!button || button.disabled) return;
 
   const action = button.dataset.authAction;
-  if (action === "admin-mode") {
-    setAdminMode(!state.isAdminMode);
-    return;
-  }
-
   button.disabled = true;
   state.auth.error = "";
 
@@ -580,11 +607,12 @@ async function syncAuthState(store) {
     state.auth.visitedRestaurantIds = memberContext.visitedRestaurantIds;
     state.auth.visitCount = memberContext.visitCount;
     state.auth.proposals = memberContext.proposals;
-    if (!memberContext.isAdmin) {
-      setAdminMode(false, { rerender: false });
-    } else {
-      updateAddButtonAccess();
-    }
+    const nextMode = memberContext.isAdmin
+      ? state.accountMode
+      : memberContext.profile?.is_catalist
+        ? "catalist"
+        : "member";
+    setAccountMode(nextMode, { rerender: false });
   } catch (error) {
     if (revision !== authSyncRevision) return;
     console.warn("member context failed", error);
@@ -596,7 +624,7 @@ async function syncAuthState(store) {
     state.auth.visitCount = 0;
     state.auth.proposals = [];
     state.auth.error = "회원 정보를 불러오지 못했습니다";
-    setAdminMode(false, { rerender: false });
+    setAccountMode("member", { rerender: false });
   }
 
   renderAuthPanel();
@@ -1539,7 +1567,11 @@ async function confirmRestaurantVisit(restaurant, button) {
     if (state.auth.profile) {
       state.auth.profile = { ...state.auth.profile, is_catalist: result.is_catalist };
     }
-    updateAddButtonAccess();
+    if (!state.auth.isAdmin && result.is_catalist) {
+      setAccountMode("catalist", { rerender: false });
+    } else {
+      updateAddButtonAccess();
+    }
     renderAuthPanel();
     render();
   } catch (error) {
