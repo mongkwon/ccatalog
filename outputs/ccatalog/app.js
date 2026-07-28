@@ -1765,7 +1765,10 @@ class SupabaseRestaurantStore {
     const redirectTo = window.location.href.split(/[?#]/)[0];
     const { error } = await this.client.auth.signInWithOAuth({
       provider: "kakao",
-      options: { redirectTo },
+      options: {
+        redirectTo,
+        scopes: "profile_nickname profile_image",
+      },
     });
     if (error) throw error;
   }
