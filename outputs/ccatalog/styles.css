@@ -1855,6 +1855,41 @@ body.has-add-access .brand-add-button {
   pointer-events: none;
 }
 
+.spot-photo-button {
+  display: inline-flex;
+  min-width: 92px;
+  height: 42px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 1px solid rgba(17, 24, 32, 0.12);
+  border-radius: 21px;
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.26);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.spot-photo-button svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+.spot-photo-button.has-selection {
+  background: rgba(17, 24, 32, 0.08);
+}
+
+.spot-photo-button + .visually-hidden + .primary-button {
+  flex: 1;
+}
+
 .form-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

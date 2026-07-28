@@ -210,6 +210,9 @@ function cacheElements() {
   els.spotForm = document.getElementById("spotForm");
   els.spotDialogTitle = document.getElementById("spotDialogTitle");
   els.spotSubmitButton = document.getElementById("spotSubmitButton");
+  els.spotPhotoButton = document.getElementById("spotPhotoButton");
+  els.spotPhotoInput = document.getElementById("spotPhotoInput");
+  els.spotPhotoCount = document.getElementById("spotPhotoCount");
   els.photoDialog = document.getElementById("photoDialog");
   els.photoDialogTitle = document.getElementById("photoDialogTitle");
   els.photoDialogCount = document.getElementById("photoDialogCount");
@@ -362,6 +365,7 @@ function bindEvents() {
   });
 
   els.spotForm.addEventListener("submit", handleSpotSubmit);
+  els.spotPhotoInput.addEventListener("change", updateSpotPhotoSelection);
 
   els.photoDialogClose.addEventListener("click", closePhotoDialog);
   els.photoUploadInput.addEventListener("change", handlePhotoUpload);
@@ -2022,6 +2026,8 @@ function openSpotDialog(restaurant = null, { mode = "restaurant" } = {}) {
   closeFloatingPanels();
   closeSelectedRestaurant();
   els.spotForm.reset();
+  els.spotPhotoInput.value = "";
+  updateSpotPhotoSelection();
   clearPlaceResults();
   clearPlaceValidation();
   state.placeSelection = null;
@@ -2029,6 +2035,7 @@ function openSpotDialog(restaurant = null, { mode = "restaurant" } = {}) {
   document.getElementById("spotId").value = restaurant?.id ?? "";
   els.spotDialogTitle.textContent = isProposalMode ? "맛집 건의" : restaurant ? "맛집 수정" : "맛집 추가";
   els.spotSubmitButton.textContent = isProposalMode ? "건의하기" : "저장";
+  els.spotPhotoButton.classList.toggle("hidden", isProposalMode || Boolean(restaurant));
 
   if (restaurant) {
     els.nameInput.value = restaurant.name;
@@ -2064,6 +2071,7 @@ async function handleSpotSubmit(event) {
   const lat = Number(formData.get("lat"));
   const lng = Number(formData.get("lng"));
   const existingRestaurant = isProposalMode ? null : state.restaurants.find((restaurant) => restaurant.id === id);
+  const selectedPhotoFiles = !isProposalMode && !existingRestaurant ? [...(els.spotPhotoInput.files ?? [])] : [];
 
   if (!isCurrentPlaceSelectionValid()) {
     requireSelectedPlaceCandidate();
@@ -2117,8 +2125,25 @@ async function handleSpotSubmit(event) {
       return;
     }
 
+    const preparedPhotos = [];
+    for (const file of selectedPhotoFiles.slice(0, RESTAURANT_PHOTO_LIMIT)) {
+      preparedPhotos.push(await prepareRestaurantPhoto(file));
+    }
+
     const savedRestaurant = await saveRestaurant(nextRestaurant, { isNew: !existingRestaurant });
     savedRestaurant.photos = normalizeRestaurantPhotos(existingRestaurant?.photos);
+
+    let photoUploadError = null;
+    for (const blob of preparedPhotos) {
+      try {
+        const photo = await state.store.addRestaurantPhoto(savedRestaurant, blob, savedRestaurant.photos.length);
+        savedRestaurant.photos.push(photo);
+      } catch (error) {
+        photoUploadError = error;
+        break;
+      }
+    }
+    savedRestaurant.photos = normalizeRestaurantPhotos(savedRestaurant.photos);
     const existingIndex = state.restaurants.findIndex((restaurant) => restaurant.id === savedRestaurant.id);
     if (existingIndex >= 0) {
       state.restaurants.splice(existingIndex, 1, savedRestaurant);
@@ -2130,12 +2155,22 @@ async function handleSpotSubmit(event) {
     closeSpotDialog({ restorePanel: false });
     render();
     state.map?.panTo({ lat: savedRestaurant.lat, lng: savedRestaurant.lng });
+    if (photoUploadError) {
+      console.warn("restaurant saved but photo upload failed", photoUploadError);
+      window.alert("맛집은 저장했지만 일부 사진을 올리지 못했습니다. 상세창의 사진 버튼에서 다시 추가해주세요.");
+    }
   } catch (error) {
     console.warn(isProposalMode ? "proposal submit failed" : "restaurant save failed", error);
     window.alert(isProposalMode ? proposalErrorMessage(error) : "맛집을 저장하지 못했습니다. Supabase 설정과 권한을 확인해주세요.");
   } finally {
     submitButton.disabled = false;
   }
+}
+
+function updateSpotPhotoSelection() {
+  const count = Math.min(els.spotPhotoInput?.files?.length ?? 0, RESTAURANT_PHOTO_LIMIT);
+  els.spotPhotoCount.textContent = count ? `사진 ${count}장` : "사진";
+  els.spotPhotoButton.classList.toggle("has-selection", count > 0);
 }
 
 function proposalErrorMessage(error) {

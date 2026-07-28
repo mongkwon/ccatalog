@@ -9,8 +9,8 @@
     <meta name="theme-color" content="#eef4f8" />
     <meta name="apple-mobile-web-app-title" content="까탈로그" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" />
-    <link rel="stylesheet" href="./styles.css?v=20260729-restaurant-photos" />
-    <script defer src="./app.js?v=20260729-restaurant-photos"></script>
+    <link rel="stylesheet" href="./styles.css?v=20260729-add-with-photos" />
+    <script defer src="./app.js?v=20260729-add-with-photos"></script>
   </head>
   <body>
     <main class="app-shell">
@@ -221,6 +221,14 @@
         </div>
 
         <div class="modal-actions">
+          <label id="spotPhotoButton" class="spot-photo-button hidden" for="spotPhotoInput">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M14.5 4 16 6h3a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h3l1.5-2h5Z" />
+              <circle cx="12" cy="12.5" r="3.5" />
+            </svg>
+            <span id="spotPhotoCount">사진</span>
+          </label>
+          <input id="spotPhotoInput" class="visually-hidden" type="file" accept="image/*" multiple />
           <button id="spotSubmitButton" class="primary-button" type="submit">저장</button>
         </div>
       </form>
