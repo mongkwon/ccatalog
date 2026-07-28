@@ -218,6 +218,14 @@ button {
   white-space: nowrap !important;
 }
 
+.svg-filter-definitions {
+  position: fixed;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
 .topbar {
   position: absolute;
   z-index: 20;
@@ -1419,8 +1427,8 @@ body.has-add-access .brand-add-button {
     background 180ms ease,
     border-color 180ms ease,
     opacity 140ms ease;
-  backdrop-filter: blur(24px) saturate(1.7) contrast(1.04);
   -webkit-backdrop-filter: blur(24px) saturate(1.7) contrast(1.04);
+  backdrop-filter: blur(24px) saturate(1.7) contrast(1.04);
 }
 
 .dock-cluster.is-search-mode .dock-indicator {
@@ -1437,8 +1445,8 @@ body.has-add-access .brand-add-button {
     inset 0 1px 0 rgba(255, 255, 255, 0.64),
     inset 0 -1px 0 rgba(17, 24, 32, 0.05),
     0 1px 0 rgba(17, 24, 32, 0.04);
-  backdrop-filter: blur(30px) saturate(1.9) contrast(1.08);
   -webkit-backdrop-filter: blur(30px) saturate(1.9) contrast(1.08);
+  backdrop-filter: blur(30px) saturate(1.9) contrast(1.08);
   transition:
     width 80ms linear,
     translate 0ms linear,
@@ -1446,6 +1454,19 @@ body.has-add-access .brand-add-button {
     background 140ms ease,
     border-color 140ms ease,
     opacity 80ms ease;
+}
+
+@supports not (-webkit-touch-callout: none) {
+  @supports (backdrop-filter: url("#dock-glass-refraction")) {
+    .dock-indicator {
+      backdrop-filter: url("#dock-glass-refraction") blur(20px) saturate(1.55) contrast(1.04);
+    }
+
+    .bottom-dock.is-pressing .dock-indicator,
+    .bottom-dock.is-dragging .dock-indicator {
+      backdrop-filter: url("#dock-glass-refraction-active") blur(24px) saturate(1.72) contrast(1.07);
+    }
+  }
 }
 
 .dock-filter-button {

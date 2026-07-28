@@ -9,10 +9,26 @@
     <meta name="theme-color" content="#eef4f8" />
     <meta name="apple-mobile-web-app-title" content="까탈로그" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" />
-    <link rel="stylesheet" href="./styles.css?v=20260729-first-visit-tutorial" />
-    <script defer src="./app.js?v=20260729-first-visit-tutorial"></script>
+    <link rel="stylesheet" href="./styles.css?v=20260729-svg-liquid-glass" />
+    <script defer src="./app.js?v=20260729-svg-liquid-glass"></script>
   </head>
   <body>
+    <svg class="svg-filter-definitions" width="0" height="0" aria-hidden="true" focusable="false">
+      <defs>
+        <filter id="dock-glass-refraction" x="-20%" y="-35%" width="140%" height="170%" color-interpolation-filters="sRGB">
+          <feTurbulence type="fractalNoise" baseFrequency="0.008 0.052" numOctaves="1" seed="19" result="glassNoise" />
+          <feGaussianBlur in="glassNoise" stdDeviation="0.65" result="softNoise" />
+          <feDisplacementMap in="SourceGraphic" in2="softNoise" scale="5" xChannelSelector="R" yChannelSelector="B" result="refracted" />
+          <feColorMatrix in="refracted" type="saturate" values="1.18" />
+        </filter>
+        <filter id="dock-glass-refraction-active" x="-28%" y="-60%" width="156%" height="220%" color-interpolation-filters="sRGB">
+          <feTurbulence type="fractalNoise" baseFrequency="0.006 0.038" numOctaves="1" seed="23" result="glassNoiseActive" />
+          <feGaussianBlur in="glassNoiseActive" stdDeviation="0.85" result="softNoiseActive" />
+          <feDisplacementMap in="SourceGraphic" in2="softNoiseActive" scale="13" xChannelSelector="R" yChannelSelector="B" result="refractedActive" />
+          <feColorMatrix in="refractedActive" type="saturate" values="1.3" />
+        </filter>
+      </defs>
+    </svg>
     <main class="app-shell">
       <section class="map-stage" aria-label="까탈로그 맛집 지도">
         <div id="map" class="map-host" aria-label="지도"></div>
