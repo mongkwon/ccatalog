@@ -112,6 +112,7 @@ const state = {
   map: null,
   lastMapCoord: DEFAULT_CENTER,
   placeSelection: null,
+  spotDialogMode: "restaurant",
   store: null,
   auth: {
     status: "loading",
@@ -120,6 +121,7 @@ const state = {
     isAdmin: false,
     visitedRestaurantIds: [],
     visitCount: 0,
+    proposals: [],
     error: "",
   },
 };
@@ -195,6 +197,7 @@ function cacheElements() {
   els.spotDialog = document.getElementById("spotDialog");
   els.spotForm = document.getElementById("spotForm");
   els.spotDialogTitle = document.getElementById("spotDialogTitle");
+  els.spotSubmitButton = document.getElementById("spotSubmitButton");
   els.nameInput = document.getElementById("nameInput");
   els.categoryInput = document.getElementById("categoryInput");
   els.areaInput = document.getElementById("areaInput");
@@ -239,7 +242,7 @@ function bindEvents() {
   });
 
   els.addButton.addEventListener("click", (event) => {
-    if (!state.isAdminMode) return;
+    if (!state.isAdminMode && !isCatalist()) return;
     event.currentTarget.blur();
 
     if (isSpotDialogOpen()) {
@@ -247,7 +250,7 @@ function bindEvents() {
       return;
     }
 
-    openSpotDialog();
+    openSpotDialog(null, { mode: state.isAdminMode ? "restaurant" : "proposal" });
   });
 
   els.searchToggle.addEventListener("click", () => {
@@ -362,14 +365,27 @@ function setAdminMode(isEnabled, { rerender = true } = {}) {
 
   state.isAdminMode = nextValue;
   document.body.classList.toggle("is-admin-mode", nextValue);
-  els.addButton.setAttribute("aria-hidden", String(!nextValue));
-  els.addButton.tabIndex = nextValue ? 0 : -1;
+  updateAddButtonAccess();
 
   renderAuthPanel();
 
   if (rerender) {
     render();
   }
+}
+
+function isCatalist() {
+  return Boolean(isMemberSignedIn() && state.auth.profile?.is_catalist);
+}
+
+function updateAddButtonAccess() {
+  const canOpen = state.isAdminMode || isCatalist();
+  const label = state.isAdminMode ? "맛집 추가" : "맛집 건의";
+  document.body.classList.toggle("has-add-access", canOpen);
+  els.addButton.setAttribute("aria-hidden", String(!canOpen));
+  els.addButton.setAttribute("aria-label", label);
+  els.addButton.title = label;
+  els.addButton.tabIndex = canOpen ? 0 : -1;
 }
 
 function isAuthPanelOpen() {
@@ -403,6 +419,37 @@ function memberDisplayName() {
 function memberAvatarUrl() {
   const metadata = state.auth.user?.user_metadata ?? {};
   return state.auth.profile?.avatar_url || metadata.avatar_url || metadata.picture || "";
+}
+
+function proposalStatusLabel(status) {
+  if (status === "approved") return "승인";
+  if (status === "rejected") return "반려";
+  return "검토 중";
+}
+
+function renderMemberProposals() {
+  if (!isCatalist()) return "";
+
+  const proposals = state.auth.proposals.slice(0, 3);
+  const rows = proposals.length
+    ? proposals
+        .map(
+          (proposal) => `
+            <div class="proposal-status-row">
+              <span>${escapeHtml(proposal.name)}</span>
+              <small data-status="${escapeHtml(proposal.status)}">${proposalStatusLabel(proposal.status)}</small>
+            </div>
+          `
+        )
+        .join("")
+    : '<p class="proposal-empty">접수된 맛집 건의가 없습니다</p>';
+
+  return `
+    <section class="member-proposals" aria-label="내 맛집 건의">
+      <strong>내 맛집 건의</strong>
+      ${rows}
+    </section>
+  `;
 }
 
 function renderAuthButton() {
@@ -472,6 +519,7 @@ function renderAuthPanel() {
       ${adminControl}
       <button class="auth-secondary-button" type="button" data-auth-action="logout">로그아웃</button>
     </div>
+    ${renderMemberProposals()}
     ${state.auth.error ? `<p class="auth-error">${escapeHtml(state.auth.error)}</p>` : ""}
   `;
 }
@@ -531,8 +579,11 @@ async function syncAuthState(store) {
     state.auth.isAdmin = memberContext.isAdmin;
     state.auth.visitedRestaurantIds = memberContext.visitedRestaurantIds;
     state.auth.visitCount = memberContext.visitCount;
+    state.auth.proposals = memberContext.proposals;
     if (!memberContext.isAdmin) {
       setAdminMode(false, { rerender: false });
+    } else {
+      updateAddButtonAccess();
     }
   } catch (error) {
     if (revision !== authSyncRevision) return;
@@ -543,6 +594,7 @@ async function syncAuthState(store) {
     state.auth.isAdmin = false;
     state.auth.visitedRestaurantIds = [];
     state.auth.visitCount = 0;
+    state.auth.proposals = [];
     state.auth.error = "회원 정보를 불러오지 못했습니다";
     setAdminMode(false, { rerender: false });
   }
@@ -959,6 +1011,7 @@ function setSelectedPlaceCandidate(place, coord) {
     area: String(place.roadAddress || place.address || "").trim(),
     lat: Number(coord.lat),
     lng: Number(coord.lng),
+    sourceLink: String(place.link || ""),
   };
   clearPlaceValidation();
 }
@@ -975,6 +1028,7 @@ function setStoredPlaceCandidate(restaurant) {
     area: String(restaurant.area || "").trim(),
     lat: coord.lat,
     lng: coord.lng,
+    sourceLink: "",
   };
   clearPlaceValidation();
 }
@@ -1485,6 +1539,7 @@ async function confirmRestaurantVisit(restaurant, button) {
     if (state.auth.profile) {
       state.auth.profile = { ...state.auth.profile, is_catalist: result.is_catalist };
     }
+    updateAddButtonAccess();
     renderAuthPanel();
     render();
   } catch (error) {
@@ -1555,8 +1610,9 @@ function selectRestaurant(id, { closePanel = false } = {}) {
   render();
 }
 
-function openSpotDialog(restaurant = null) {
-  if (!state.isAdminMode) return;
+function openSpotDialog(restaurant = null, { mode = "restaurant" } = {}) {
+  const isProposalMode = mode === "proposal";
+  if (isProposalMode ? !isCatalist() : !state.isAdminMode) return;
 
   closeFloatingPanels();
   closeSelectedRestaurant();
@@ -1564,8 +1620,10 @@ function openSpotDialog(restaurant = null) {
   clearPlaceResults();
   clearPlaceValidation();
   state.placeSelection = null;
+  state.spotDialogMode = isProposalMode ? "proposal" : "restaurant";
   document.getElementById("spotId").value = restaurant?.id ?? "";
-  els.spotDialogTitle.textContent = restaurant ? "맛집 수정" : "맛집 추가";
+  els.spotDialogTitle.textContent = isProposalMode ? "맛집 건의" : restaurant ? "맛집 수정" : "맛집 추가";
+  els.spotSubmitButton.textContent = isProposalMode ? "건의하기" : "저장";
 
   if (restaurant) {
     els.nameInput.value = restaurant.name;
@@ -1592,14 +1650,15 @@ function openSpotDialog(restaurant = null) {
 
 async function handleSpotSubmit(event) {
   event.preventDefault();
-  if (!state.isAdminMode) return;
+  const isProposalMode = state.spotDialogMode === "proposal";
+  if (isProposalMode ? !isCatalist() : !state.isAdminMode) return;
 
   addMenuFromDraft({ refocus: false });
   const formData = new FormData(els.spotForm);
   const id = String(formData.get("id") || "").trim();
   const lat = Number(formData.get("lat"));
   const lng = Number(formData.get("lng"));
-  const existingRestaurant = state.restaurants.find((restaurant) => restaurant.id === id);
+  const existingRestaurant = isProposalMode ? null : state.restaurants.find((restaurant) => restaurant.id === id);
 
   if (!isCurrentPlaceSelectionValid()) {
     requireSelectedPlaceCandidate();
@@ -1633,6 +1692,26 @@ async function handleSpotSubmit(event) {
   submitButton.disabled = true;
 
   try {
+    if (isProposalMode) {
+      if (typeof state.store?.submitRestaurantProposal !== "function") {
+        throw new Error("proposal_unavailable");
+      }
+      const proposal = await state.store.submitRestaurantProposal(nextRestaurant, state.placeSelection);
+      state.auth.proposals = [
+        {
+          id: proposal.proposal_id,
+          name: nextRestaurant.name,
+          status: proposal.proposal_status,
+          created_at: proposal.proposal_created_at,
+        },
+        ...state.auth.proposals,
+      ];
+      closeSpotDialog({ restorePanel: true });
+      setAuthPanelOpen(true);
+      renderAuthPanel();
+      return;
+    }
+
     const savedRestaurant = await saveRestaurant(nextRestaurant, { isNew: !existingRestaurant });
     const existingIndex = state.restaurants.findIndex((restaurant) => restaurant.id === savedRestaurant.id);
     if (existingIndex >= 0) {
@@ -1646,11 +1725,19 @@ async function handleSpotSubmit(event) {
     render();
     state.map?.panTo({ lat: savedRestaurant.lat, lng: savedRestaurant.lng });
   } catch (error) {
-    console.warn("restaurant save failed", error);
-    window.alert("맛집을 저장하지 못했습니다. Supabase 설정과 권한을 확인해주세요.");
+    console.warn(isProposalMode ? "proposal submit failed" : "restaurant save failed", error);
+    window.alert(isProposalMode ? proposalErrorMessage(error) : "맛집을 저장하지 못했습니다. Supabase 설정과 권한을 확인해주세요.");
   } finally {
     submitButton.disabled = false;
   }
+}
+
+function proposalErrorMessage(error) {
+  const message = String(error?.message || "");
+  if (message.includes("catalist_required")) return "까탈리스트만 맛집을 건의할 수 있습니다.";
+  if (message.includes("restaurant_already_exists")) return "이미 까탈로그에 등록된 음식점입니다.";
+  if (message.includes("proposal_already_pending")) return "이미 검토 중인 맛집 건의가 있습니다.";
+  return "맛집 건의를 접수하지 못했습니다. 잠시 후 다시 시도해주세요.";
 }
 
 async function deleteRestaurant(id) {
@@ -1882,18 +1969,24 @@ class SupabaseRestaurantStore {
   async getMemberContext() {
     const user = this.session?.user ?? null;
     if (!user || user.is_anonymous) {
-      return { user: null, profile: null, isAdmin: false, visitedRestaurantIds: [], visitCount: 0 };
+      return { user: null, profile: null, isAdmin: false, visitedRestaurantIds: [], visitCount: 0, proposals: [] };
     }
 
-    const [profileResult, adminResult, visitsResult] = await Promise.all([
+    const [profileResult, adminResult, visitsResult, proposalsResult] = await Promise.all([
       this.client.from("profiles").select("id,nickname,avatar_url,is_catalist,catalist_qualified_at").eq("id", user.id).maybeSingle(),
       this.client.from("admin_users").select("user_id").eq("user_id", user.id).maybeSingle(),
       this.client.from("restaurant_visits").select("restaurant_id").order("agreed_at", { ascending: true }),
+      this.client
+        .from("restaurant_proposals")
+        .select("id,name,status,created_at")
+        .eq("proposer_id", user.id)
+        .order("created_at", { ascending: false }),
     ]);
 
     if (profileResult.error) throw profileResult.error;
     if (adminResult.error) throw adminResult.error;
     if (visitsResult.error) throw visitsResult.error;
+    if (proposalsResult.error) throw proposalsResult.error;
 
     const visitedRestaurantIds = (visitsResult.data ?? []).map((visit) => visit.restaurant_id);
 
@@ -1903,6 +1996,7 @@ class SupabaseRestaurantStore {
       isAdmin: Boolean(adminResult.data),
       visitedRestaurantIds,
       visitCount: visitedRestaurantIds.length,
+      proposals: proposalsResult.data ?? [],
     };
   }
 
@@ -1933,6 +2027,24 @@ class SupabaseRestaurantStore {
     });
     if (error) throw error;
     if (!data?.[0]) throw new Error("visit_result_missing");
+    return data[0];
+  }
+
+  async submitRestaurantProposal(restaurant, placeSelection) {
+    const { data, error } = await this.client.rpc("submit_restaurant_proposal", {
+      p_name: restaurant.name,
+      p_category: restaurant.category,
+      p_suggested_rating: restaurant.rating,
+      p_area: restaurant.area,
+      p_lat: restaurant.lat,
+      p_lng: restaurant.lng,
+      p_menu_items: restaurant.menuItems,
+      p_delivery_apps: restaurant.deliveryApps,
+      p_memo: restaurant.memo,
+      p_source_link: placeSelection?.sourceLink || "",
+    });
+    if (error) throw error;
+    if (!data?.[0]) throw new Error("proposal_result_missing");
     return data[0];
   }
 
