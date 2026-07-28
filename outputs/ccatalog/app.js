@@ -125,6 +125,9 @@ const state = {
   photoManagerError: false,
   photoViewerRestaurantId: null,
   photoViewerIndex: 0,
+  proposalReviewBusyId: null,
+  proposalReviewStatus: "",
+  proposalReviewError: false,
   store: null,
   auth: {
     status: "loading",
@@ -134,6 +137,7 @@ const state = {
     visitedRestaurantIds: [],
     visitCount: 0,
     proposals: [],
+    adminProposals: [],
     error: "",
   },
 };
@@ -227,6 +231,11 @@ function cacheElements() {
   els.photoViewerNext = document.getElementById("photoViewerNext");
   els.photoViewerImage = document.getElementById("photoViewerImage");
   els.photoViewerCaption = document.getElementById("photoViewerCaption");
+  els.proposalReviewDialog = document.getElementById("proposalReviewDialog");
+  els.proposalReviewCount = document.getElementById("proposalReviewCount");
+  els.proposalReviewClose = document.getElementById("proposalReviewClose");
+  els.proposalReviewList = document.getElementById("proposalReviewList");
+  els.proposalReviewStatus = document.getElementById("proposalReviewStatus");
   els.nameInput = document.getElementById("nameInput");
   els.categoryInput = document.getElementById("categoryInput");
   els.areaInput = document.getElementById("areaInput");
@@ -322,6 +331,8 @@ function bindEvents() {
 
     if (isPhotoViewerOpen()) {
       closePhotoViewer();
+    } else if (isProposalReviewDialogOpen()) {
+      closeProposalReviewDialog();
     } else if (isPhotoDialogOpen()) {
       closePhotoDialog();
     } else if (isSpotDialogOpen()) {
@@ -376,6 +387,8 @@ function bindEvents() {
   els.photoViewer.addEventListener("click", (event) => {
     if (event.target === els.photoViewer) closePhotoViewer();
   });
+  els.proposalReviewClose.addEventListener("click", closeProposalReviewDialog);
+  els.proposalReviewList.addEventListener("click", handleProposalReviewClick);
 }
 
 function setRestaurantPanelOpen(isOpen) {
@@ -417,6 +430,9 @@ function setAccountMode(mode, { rerender = true } = {}) {
   }
   if (state.accountMode !== nextMode && isPhotoDialogOpen()) {
     closePhotoDialog();
+  }
+  if (nextMode !== "admin" && isProposalReviewDialogOpen()) {
+    closeProposalReviewDialog();
   }
 
   state.accountMode = nextMode;
@@ -564,6 +580,7 @@ function renderAuthPanel() {
     ? `<img src="${escapeHtml(avatarUrl)}" alt="" referrerpolicy="no-referrer" />`
     : `<span aria-hidden="true">${escapeHtml(memberDisplayName().slice(0, 1))}</span>`;
   const roleLabel = state.auth.isAdmin ? `관리자 계정 · ${accountModeLabel()} 모드` : state.auth.profile?.is_catalist ? "까탈리스트" : "회원";
+  const pendingProposalCount = state.auth.adminProposals.length;
   const adminControl = state.auth.isAdmin
     ? `
       <div class="account-mode-control" role="group" aria-label="사용 모드">
@@ -597,6 +614,13 @@ function renderAuthPanel() {
     </div>
     <div class="auth-panel-actions">
       ${adminControl}
+      ${
+        state.isAdminMode
+          ? `<button class="auth-secondary-button review-proposals-button" type="button" data-auth-action="review-proposals">
+              <span>맛집 건의 검토</span><strong>${pendingProposalCount}</strong>
+            </button>`
+          : ""
+      }
       <button class="auth-secondary-button" type="button" data-auth-action="logout">로그아웃</button>
     </div>
     ${renderMemberProposals()}
@@ -624,6 +648,9 @@ async function handleAuthPanelClick(event) {
         throw new Error("auth unavailable");
       }
       await state.store.signInWithKakao();
+    } else if (action === "review-proposals") {
+      setAuthPanelOpen(false);
+      await openProposalReviewDialog();
     } else if (action === "logout") {
       await state.store?.signOut?.();
       setAuthPanelOpen(false);
@@ -661,6 +688,7 @@ async function syncAuthState(store) {
     state.auth.visitedRestaurantIds = memberContext.visitedRestaurantIds;
     state.auth.visitCount = memberContext.visitCount;
     state.auth.proposals = memberContext.proposals;
+    state.auth.adminProposals = memberContext.adminProposals;
     const nextMode = memberContext.isAdmin
       ? state.accountMode
       : memberContext.profile?.is_catalist
@@ -677,6 +705,7 @@ async function syncAuthState(store) {
     state.auth.visitedRestaurantIds = [];
     state.auth.visitCount = 0;
     state.auth.proposals = [];
+    state.auth.adminProposals = [];
     state.auth.error = "회원 정보를 불러오지 못했습니다";
     setAccountMode("member", { rerender: false });
   }
@@ -2007,6 +2036,7 @@ function visitErrorMessage(error) {
 
 function selectRestaurant(id, { closePanel = false } = {}) {
   if (isPhotoDialogOpen()) closePhotoDialog();
+  if (isProposalReviewDialogOpen()) closeProposalReviewDialog();
   if (closePanel) {
     closeFloatingPanels();
   }
@@ -2119,6 +2149,26 @@ async function handleSpotSubmit(event) {
         },
         ...state.auth.proposals,
       ];
+      if (state.auth.isAdmin) {
+        state.auth.adminProposals = [
+          {
+            id: proposal.proposal_id,
+            status: proposal.proposal_status,
+            created_at: proposal.proposal_created_at,
+            name: nextRestaurant.name,
+            category: nextRestaurant.category,
+            suggested_rating: nextRestaurant.rating,
+            area: nextRestaurant.area,
+            lat: nextRestaurant.lat,
+            lng: nextRestaurant.lng,
+            menu_items: nextRestaurant.menuItems,
+            delivery_apps: nextRestaurant.deliveryApps,
+            memo: nextRestaurant.memo,
+            source_link: state.placeSelection?.sourceLink || "",
+          },
+          ...state.auth.adminProposals,
+        ];
+      }
       closeSpotDialog({ restorePanel: true });
       setAuthPanelOpen(true);
       renderAuthPanel();
@@ -2171,6 +2221,133 @@ function updateSpotPhotoSelection() {
   const count = Math.min(els.spotPhotoInput?.files?.length ?? 0, RESTAURANT_PHOTO_LIMIT);
   els.spotPhotoCount.textContent = count ? `사진 ${count}장` : "사진";
   els.spotPhotoButton.classList.toggle("has-selection", count > 0);
+}
+
+function isProposalReviewDialogOpen() {
+  return els.proposalReviewDialog?.classList.contains("is-open");
+}
+
+async function openProposalReviewDialog() {
+  if (!state.isAdminMode || typeof state.store?.listPendingRestaurantProposals !== "function") return;
+
+  if (isSpotDialogOpen()) closeSpotDialog({ restorePanel: false });
+  if (isPhotoDialogOpen()) closePhotoDialog();
+  closeSelectedRestaurant();
+  closeFloatingPanels();
+  state.proposalReviewBusyId = null;
+  state.proposalReviewStatus = "불러오는 중";
+  state.proposalReviewError = false;
+  renderProposalReviewDialog();
+  els.proposalReviewDialog.setAttribute("aria-hidden", "false");
+  window.requestAnimationFrame(() => els.proposalReviewDialog.classList.add("is-open"));
+
+  try {
+    state.auth.adminProposals = await state.store.listPendingRestaurantProposals();
+    state.proposalReviewStatus = "";
+    renderAuthPanel();
+  } catch (error) {
+    console.warn("proposal review list failed", error);
+    state.proposalReviewStatus = "맛집 건의를 불러오지 못했습니다";
+    state.proposalReviewError = true;
+  }
+  renderProposalReviewDialog();
+}
+
+function closeProposalReviewDialog({ restorePanel = true } = {}) {
+  if (!els.proposalReviewDialog) return;
+  els.proposalReviewDialog.classList.remove("is-open");
+  els.proposalReviewDialog.setAttribute("aria-hidden", "true");
+  state.proposalReviewBusyId = null;
+  state.proposalReviewStatus = "";
+  state.proposalReviewError = false;
+  if (restorePanel && !state.selectedId) setRestaurantPanelOpen(true);
+}
+
+function renderProposalReviewDialog() {
+  const proposals = state.auth.adminProposals;
+  els.proposalReviewCount.textContent = `${proposals.length}건`;
+  els.proposalReviewStatus.textContent = state.proposalReviewStatus;
+  els.proposalReviewStatus.classList.toggle("is-error", state.proposalReviewError);
+
+  if (!proposals.length) {
+    els.proposalReviewList.innerHTML = '<div class="proposal-review-empty">검토할 맛집 건의가 없습니다</div>';
+    return;
+  }
+
+  els.proposalReviewList.innerHTML = proposals
+    .map((proposal) => {
+      const rating = RATING_META[clampRating(proposal.suggested_rating)];
+      const menuSummary = menuItemsSummary(normalizeMenuItems(proposal.menu_items), 3);
+      const delivery = deliverySummary(proposal.delivery_apps);
+      const summary = [menuSummary, delivery].filter(Boolean).join(" · ");
+      const isBusy = state.proposalReviewBusyId === proposal.id;
+      return `
+        <article class="proposal-review-item">
+          <div class="proposal-review-item-header">
+            <div>
+              <h3>${escapeHtml(proposal.name)}</h3>
+              <p>${escapeHtml([proposal.category, proposal.area].filter(Boolean).join(" · "))}</p>
+            </div>
+            <span class="proposal-rating">${rating.icon} ${rating.label}</span>
+          </div>
+          ${summary ? `<p class="proposal-review-summary">${escapeHtml(summary)}</p>` : ""}
+          ${proposal.memo ? `<p class="proposal-review-memo">${escapeHtml(proposal.memo)}</p>` : ""}
+          <div class="proposal-review-actions">
+            <a href="https://map.naver.com/p/search/${encodeURIComponent(proposal.name)}" target="_blank" rel="noopener noreferrer">네이버지도</a>
+            <button type="button" data-review-decision="rejected" data-proposal-id="${proposal.id}" ${isBusy ? "disabled" : ""}>반려</button>
+            <button class="approve-proposal-button" type="button" data-review-decision="approved" data-proposal-id="${proposal.id}" ${isBusy ? "disabled" : ""}>승인</button>
+          </div>
+        </article>
+      `;
+    })
+    .join("");
+}
+
+async function handleProposalReviewClick(event) {
+  const button = event.target.closest("[data-review-decision]");
+  if (!button || button.disabled || !state.isAdminMode || state.proposalReviewBusyId) return;
+
+  const proposal = state.auth.adminProposals.find((item) => item.id === button.dataset.proposalId);
+  const decision = button.dataset.reviewDecision;
+  if (!proposal || !["approved", "rejected"].includes(decision)) return;
+
+  const verb = decision === "approved" ? "승인" : "반려";
+  if (!window.confirm(`${proposal.name} 건의를 ${verb}할까요?`)) return;
+
+  state.proposalReviewBusyId = proposal.id;
+  state.proposalReviewStatus = `${verb} 처리 중`;
+  state.proposalReviewError = false;
+  renderProposalReviewDialog();
+
+  try {
+    await state.store.reviewRestaurantProposal(proposal.id, decision);
+    state.auth.adminProposals = state.auth.adminProposals.filter((item) => item.id !== proposal.id);
+    state.auth.proposals = state.auth.proposals.map((item) =>
+      item.id === proposal.id ? { ...item, status: decision } : item
+    );
+    if (decision === "approved") {
+      state.restaurants = await state.store.list();
+    }
+    state.proposalReviewStatus = `${proposal.name} 건의를 ${verb}했습니다`;
+    renderAuthPanel();
+    render();
+  } catch (error) {
+    console.warn("proposal review failed", error);
+    state.proposalReviewStatus = proposalReviewErrorMessage(error);
+    state.proposalReviewError = true;
+  } finally {
+    state.proposalReviewBusyId = null;
+    renderProposalReviewDialog();
+  }
+}
+
+function proposalReviewErrorMessage(error) {
+  const message = String(error?.message || "");
+  if (message.includes("proposal_already_reviewed")) return "이미 처리된 맛집 건의입니다";
+  if (message.includes("restaurant_already_exists")) return "같은 위치의 음식점이 이미 등록되어 있습니다";
+  if (message.includes("proposal_not_approvable")) return "등록 기준에 맞지 않아 승인할 수 없습니다";
+  if (message.includes("admin_required")) return "관리자만 맛집 건의를 검토할 수 있습니다";
+  return "맛집 건의를 처리하지 못했습니다";
 }
 
 function proposalErrorMessage(error) {
@@ -2411,7 +2588,7 @@ class SupabaseRestaurantStore {
   async getMemberContext() {
     const user = this.session?.user ?? null;
     if (!user || user.is_anonymous) {
-      return { user: null, profile: null, isAdmin: false, visitedRestaurantIds: [], visitCount: 0, proposals: [] };
+      return { user: null, profile: null, isAdmin: false, visitedRestaurantIds: [], visitCount: 0, proposals: [], adminProposals: [] };
     }
 
     const [profileResult, adminResult, visitsResult, proposalsResult] = await Promise.all([
@@ -2431,6 +2608,10 @@ class SupabaseRestaurantStore {
     if (proposalsResult.error) throw proposalsResult.error;
 
     const visitedRestaurantIds = (visitsResult.data ?? []).map((visit) => visit.restaurant_id);
+    let adminProposals = [];
+    if (adminResult.data) {
+      adminProposals = await this.listPendingRestaurantProposals();
+    }
 
     return {
       user,
@@ -2439,6 +2620,7 @@ class SupabaseRestaurantStore {
       visitedRestaurantIds,
       visitCount: visitedRestaurantIds.length,
       proposals: proposalsResult.data ?? [],
+      adminProposals,
     };
   }
 
@@ -2487,6 +2669,26 @@ class SupabaseRestaurantStore {
     });
     if (error) throw error;
     if (!data?.[0]) throw new Error("proposal_result_missing");
+    return data[0];
+  }
+
+  async listPendingRestaurantProposals() {
+    const { data, error } = await this.client
+      .from("restaurant_proposals")
+      .select("id,status,name,category,suggested_rating,area,lat,lng,menu_items,delivery_apps,memo,source_link,created_at")
+      .eq("status", "pending")
+      .order("created_at", { ascending: true });
+    if (error) throw error;
+    return data ?? [];
+  }
+
+  async reviewRestaurantProposal(proposalId, decision) {
+    const { data, error } = await this.client.rpc("review_restaurant_proposal", {
+      p_proposal_id: proposalId,
+      p_decision: decision,
+    });
+    if (error) throw error;
+    if (!data?.[0]) throw new Error("proposal_review_result_missing");
     return data[0];
   }
 

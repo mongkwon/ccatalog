@@ -9,8 +9,8 @@
     <meta name="theme-color" content="#eef4f8" />
     <meta name="apple-mobile-web-app-title" content="까탈로그" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" />
-    <link rel="stylesheet" href="./styles.css?v=20260729-add-with-photos" />
-    <script defer src="./app.js?v=20260729-add-with-photos"></script>
+    <link rel="stylesheet" href="./styles.css?v=20260729-proposal-review" />
+    <script defer src="./app.js?v=20260729-proposal-review"></script>
   </head>
   <body>
     <main class="app-shell">
@@ -272,6 +272,22 @@
       <button id="photoViewerNext" class="photo-viewer-nav is-next" type="button" aria-label="다음 사진" title="다음 사진">
         <span aria-hidden="true">›</span>
       </button>
+    </section>
+
+    <section id="proposalReviewDialog" class="modal proposal-review-modal" role="dialog" aria-labelledby="proposalReviewTitle" aria-hidden="true">
+      <div class="modal-card proposal-review-card">
+        <div class="modal-header proposal-review-header">
+          <div>
+            <h2 id="proposalReviewTitle">맛집 건의 검토</h2>
+            <p id="proposalReviewCount">0건</p>
+          </div>
+          <button id="proposalReviewClose" class="icon-button proposal-review-close" type="button" aria-label="건의 검토 닫기" title="닫기">
+            <span aria-hidden="true">×</span>
+          </button>
+        </div>
+        <div id="proposalReviewList" class="proposal-review-list" aria-live="polite"></div>
+        <p id="proposalReviewStatus" class="proposal-review-status" aria-live="polite"></p>
+      </div>
     </section>
 
   </body>
