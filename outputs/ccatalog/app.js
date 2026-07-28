@@ -1685,7 +1685,7 @@ class LocalRestaurantStore {
   }
 
   async save(restaurant) {
-    const nextRestaurant = normalizeRestaurant({ ...restaurant, canEdit: true });
+    const nextRestaurant = normalizeRestaurant(restaurant);
     const restaurants = loadLocalRestaurants();
     const existingIndex = restaurants.findIndex((item) => item.id === nextRestaurant.id);
     if (existingIndex >= 0) {
@@ -1785,7 +1785,7 @@ class SupabaseRestaurantStore {
       .order("name", { ascending: true });
 
     if (error) throw error;
-    return (data ?? []).map((row) => rowToRestaurant(row, this.userId)).filter(Boolean);
+    return (data ?? []).map(rowToRestaurant).filter(Boolean);
   }
 
   async save(restaurant, { isNew } = {}) {
@@ -1793,14 +1793,14 @@ class SupabaseRestaurantStore {
     let query;
 
     if (isNew) {
-      query = this.client.from(SUPABASE_TABLE).insert({ ...payload, owner_id: this.userId });
+      query = this.client.from(SUPABASE_TABLE).insert(payload);
     } else {
       query = this.client.from(SUPABASE_TABLE).update(payload).eq("id", restaurant.id);
     }
 
     const { data, error } = await query.select(RESTAURANT_SELECT_COLUMNS).single();
     if (error) throw error;
-    return rowToRestaurant(data, this.userId);
+    return rowToRestaurant(data);
   }
 
   async remove(id) {
@@ -1811,7 +1811,6 @@ class SupabaseRestaurantStore {
 
 const RESTAURANT_SELECT_COLUMNS = [
   "id",
-  "owner_id",
   "name",
   "category",
   "rating",
@@ -1826,7 +1825,7 @@ const RESTAURANT_SELECT_COLUMNS = [
   "updated_at",
 ].join(",");
 
-function rowToRestaurant(row, userId) {
+function rowToRestaurant(row) {
   return normalizeRestaurant({
     id: row.id,
     name: row.name,
@@ -1839,7 +1838,6 @@ function rowToRestaurant(row, userId) {
     menuItems: row.menu_items,
     deliveryApps: row.delivery_apps,
     memo: row.memo,
-    canEdit: row.owner_id === userId,
   });
 }
 
@@ -1912,7 +1910,6 @@ function normalizeRestaurant(item) {
     menuItems,
     deliveryApps: normalizeDeliveryApps(item.deliveryApps),
     memo: String(item.memo || ""),
-    canEdit: item.canEdit !== false,
   };
 }
 
