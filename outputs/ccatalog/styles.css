@@ -610,8 +610,8 @@ body.has-add-access .brand-add-button {
 
 .brand h1 {
   margin: 0;
-  font-size: 21px;
-  font-weight: 900;
+  font-size: 19px;
+  font-weight: 800;
   line-height: 1.05;
   letter-spacing: 0;
   text-align: center;
@@ -2592,7 +2592,7 @@ body.has-add-access .brand-add-button {
   }
 
   .brand h1 {
-    font-size: 18px;
+    font-size: 17px;
   }
 
   .brand-admin-button,
