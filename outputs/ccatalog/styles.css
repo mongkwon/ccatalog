@@ -1414,7 +1414,7 @@ body.has-add-access .brand-add-button {
   border-radius: 999px;
   opacity: var(--dock-indicator-opacity);
   pointer-events: none;
-  background: rgba(234, 237, 242, 0.34);
+  background: rgba(234, 237, 242, 0.5);
   box-shadow: 0 1px 0 rgba(17, 24, 32, 0.04);
   transform: none;
   transform-origin: center center;
@@ -1440,7 +1440,7 @@ body.has-add-access .brand-add-button {
   --dock-indicator-scale-x: 1.18;
   --dock-indicator-scale-y: 1.72;
   border-color: rgba(255, 255, 255, 0.62);
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.16);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.64),
     inset 0 -1px 0 rgba(17, 24, 32, 0.05),
@@ -1458,19 +1458,13 @@ body.has-add-access .brand-add-button {
 
 @supports not (-webkit-touch-callout: none) {
   @supports (backdrop-filter: url("#dock-glass-refraction")) {
-    .bottom-dock {
-      background: rgba(245, 247, 250, 0.2);
-      -webkit-backdrop-filter: none;
-      backdrop-filter: none;
-    }
-
     .dock-indicator {
-      backdrop-filter: url("#dock-glass-refraction") blur(0.16px) saturate(1.22) contrast(1.06);
+      backdrop-filter: url("#dock-glass-refraction") blur(20px) saturate(1.55) contrast(1.04);
     }
 
     .bottom-dock.is-pressing .dock-indicator,
     .bottom-dock.is-dragging .dock-indicator {
-      backdrop-filter: url("#dock-glass-refraction-active") blur(0.22px) saturate(1.34) contrast(1.08);
+      backdrop-filter: url("#dock-glass-refraction-active") blur(24px) saturate(1.72) contrast(1.07);
     }
   }
 }

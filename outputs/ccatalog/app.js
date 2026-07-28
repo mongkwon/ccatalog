@@ -178,8 +178,6 @@ const dockDragState = {
 let spotDialogOpenFrame = null;
 let dockIndicatorUpdateTimer = null;
 let authSyncRevision = 0;
-let dockGlassMapWidth = 0;
-let dockGlassMapHeight = 0;
 
 document.addEventListener("DOMContentLoaded", init);
 document.addEventListener("gesturestart", preventPageZoom, { passive: false });
@@ -231,12 +229,6 @@ function cacheElements() {
   els.dockCluster = document.querySelector(".dock-cluster");
   els.bottomDock = document.querySelector(".bottom-dock");
   els.dockIndicator = document.querySelector(".dock-indicator");
-  els.dockGlassFilter = document.getElementById("dock-glass-refraction");
-  els.dockGlassFilterActive = document.getElementById("dock-glass-refraction-active");
-  els.dockGlassMap = document.getElementById("dockGlassMap");
-  els.dockGlassMapActive = document.getElementById("dockGlassMapActive");
-  els.dockGlassSpecular = document.getElementById("dockGlassSpecular");
-  els.dockGlassSpecularActive = document.getElementById("dockGlassSpecularActive");
   els.filterModeButton = document.getElementById("filterModeButton");
   els.adminButton = document.getElementById("adminButton");
   els.addButton = document.getElementById("addButton");
@@ -930,117 +922,6 @@ function setDockIndicatorToIndex(index) {
   els.bottomDock.style.setProperty("--dock-indicator-x", `${button.offsetLeft}px`);
   els.bottomDock.style.setProperty("--dock-indicator-width", `${button.offsetWidth}px`);
   els.bottomDock.style.setProperty("--dock-indicator-opacity", "1");
-  updateDockGlassMaps(button.offsetWidth, els.dockIndicator.offsetHeight || 48);
-}
-
-function updateDockGlassMaps(width, height) {
-  const nextWidth = Math.max(1, Math.round(width));
-  const nextHeight = Math.max(1, Math.round(height));
-  if (nextWidth === dockGlassMapWidth && nextHeight === dockGlassMapHeight) return;
-  if (!els.dockGlassMap || !els.dockGlassSpecular) return;
-
-  dockGlassMapWidth = nextWidth;
-  dockGlassMapHeight = nextHeight;
-  const maps = createDockGlassMaps(nextWidth, nextHeight);
-
-  [els.dockGlassFilter, els.dockGlassFilterActive].forEach((filter) => {
-    filter.setAttribute("width", String(nextWidth));
-    filter.setAttribute("height", String(nextHeight));
-  });
-  [els.dockGlassMap, els.dockGlassMapActive, els.dockGlassSpecular, els.dockGlassSpecularActive].forEach((image) => {
-    image.setAttribute("width", String(nextWidth));
-    image.setAttribute("height", String(nextHeight));
-  });
-
-  els.dockGlassMap.setAttribute("href", maps.displacement);
-  els.dockGlassMapActive.setAttribute("href", maps.displacement);
-  els.dockGlassSpecular.setAttribute("href", maps.specular);
-  els.dockGlassSpecularActive.setAttribute("href", maps.specularActive);
-}
-
-function createDockGlassMaps(width, height) {
-  const resolution = 2;
-  const pixelWidth = width * resolution;
-  const pixelHeight = height * resolution;
-  const displacementCanvas = document.createElement("canvas");
-  const specularCanvas = document.createElement("canvas");
-  const specularActiveCanvas = document.createElement("canvas");
-  displacementCanvas.width = specularCanvas.width = specularActiveCanvas.width = pixelWidth;
-  displacementCanvas.height = specularCanvas.height = specularActiveCanvas.height = pixelHeight;
-
-  const displacementContext = displacementCanvas.getContext("2d");
-  const specularContext = specularCanvas.getContext("2d");
-  const specularActiveContext = specularActiveCanvas.getContext("2d");
-  const displacementPixels = displacementContext.createImageData(pixelWidth, pixelHeight);
-  const specularPixels = specularContext.createImageData(pixelWidth, pixelHeight);
-  const specularActivePixels = specularActiveContext.createImageData(pixelWidth, pixelHeight);
-  const halfWidth = width / 2;
-  const halfHeight = height / 2;
-  const radius = Math.max(1, halfHeight - 1);
-  const bezel = Math.min(13, height * 0.29);
-  const lightX = 0.5;
-  const lightY = -0.866;
-
-  for (let pixelY = 0; pixelY < pixelHeight; pixelY += 1) {
-    for (let pixelX = 0; pixelX < pixelWidth; pixelX += 1) {
-      const x = (pixelX + 0.5) / resolution - halfWidth;
-      const y = (pixelY + 0.5) / resolution - halfHeight;
-      const distance = roundedRectDistance(x, y, halfWidth, halfHeight, radius);
-      const offset = (pixelY * pixelWidth + pixelX) * 4;
-
-      displacementPixels.data[offset] = 128;
-      displacementPixels.data[offset + 1] = 128;
-      displacementPixels.data[offset + 2] = 128;
-      displacementPixels.data[offset + 3] = 255;
-      if (distance > 0) continue;
-
-      const edgeDepth = -distance;
-      const rim = 1 - smoothStep(0, bezel, edgeDepth);
-      if (rim <= 0) continue;
-
-      const gradientX = roundedRectDistance(x + 0.5, y, halfWidth, halfHeight, radius) - roundedRectDistance(x - 0.5, y, halfWidth, halfHeight, radius);
-      const gradientY = roundedRectDistance(x, y + 0.5, halfWidth, halfHeight, radius) - roundedRectDistance(x, y - 0.5, halfWidth, halfHeight, radius);
-      const gradientLength = Math.hypot(gradientX, gradientY) || 1;
-      const normalX = gradientX / gradientLength;
-      const normalY = gradientY / gradientLength;
-      const displacementStrength = Math.pow(rim, 1.35);
-
-      displacementPixels.data[offset] = Math.round(128 - normalX * displacementStrength * 127);
-      displacementPixels.data[offset + 1] = Math.round(128 - normalY * displacementStrength * 127);
-
-      const light = Math.pow(Math.max(0, normalX * lightX + normalY * lightY), 1.8);
-      const highlight = Math.pow(rim, 1.5) * light;
-      writeSpecularPixel(specularPixels.data, offset, highlight, 34);
-      writeSpecularPixel(specularActivePixels.data, offset, highlight, 54);
-    }
-  }
-
-  displacementContext.putImageData(displacementPixels, 0, 0);
-  specularContext.putImageData(specularPixels, 0, 0);
-  specularActiveContext.putImageData(specularActivePixels, 0, 0);
-  return {
-    displacement: displacementCanvas.toDataURL("image/png"),
-    specular: specularCanvas.toDataURL("image/png"),
-    specularActive: specularActiveCanvas.toDataURL("image/png"),
-  };
-}
-
-function roundedRectDistance(x, y, halfWidth, halfHeight, radius) {
-  const qx = Math.abs(x) - halfWidth + radius;
-  const qy = Math.abs(y) - halfHeight + radius;
-  return Math.min(Math.max(qx, qy), 0) + Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) - radius;
-}
-
-function smoothStep(minimum, maximum, value) {
-  const amount = Math.max(0, Math.min(1, (value - minimum) / (maximum - minimum)));
-  return amount * amount * (3 - 2 * amount);
-}
-
-function writeSpecularPixel(pixels, offset, strength, maximumAlpha) {
-  pixels[offset] = 218;
-  pixels[offset + 1] = 236;
-  pixels[offset + 2] = 242;
-  pixels[offset + 3] = Math.round(strength * maximumAlpha);
 }
 
 function scheduleDockIndicatorUpdate(delay = 0) {
