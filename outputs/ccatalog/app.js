@@ -112,6 +112,13 @@ const state = {
   lastMapCoord: DEFAULT_CENTER,
   placeSelection: null,
   store: null,
+  auth: {
+    status: "loading",
+    user: null,
+    profile: null,
+    isAdmin: false,
+    error: "",
+  },
 };
 
 const els = {};
@@ -126,6 +133,7 @@ const dockDragState = {
 };
 let spotDialogOpenFrame = null;
 let dockIndicatorUpdateTimer = null;
+let authSyncRevision = 0;
 
 document.addEventListener("DOMContentLoaded", init);
 document.addEventListener("gesturestart", preventPageZoom, { passive: false });
@@ -179,6 +187,7 @@ function cacheElements() {
   els.filterModeButton = document.getElementById("filterModeButton");
   els.adminButton = document.getElementById("adminButton");
   els.addButton = document.getElementById("addButton");
+  els.authPanel = document.getElementById("authPanel");
   els.searchToggle = document.getElementById("searchToggle");
   els.spotDialog = document.getElementById("spotDialog");
   els.spotForm = document.getElementById("spotForm");
@@ -213,8 +222,17 @@ function bindEvents() {
     });
   });
 
-  els.adminButton.addEventListener("click", () => {
-    setAdminMode(!state.isAdminMode);
+  els.adminButton.addEventListener("click", (event) => {
+    event.stopPropagation();
+    setAuthPanelOpen(!isAuthPanelOpen());
+  });
+
+  els.authPanel.addEventListener("click", handleAuthPanelClick);
+
+  document.addEventListener("pointerdown", (event) => {
+    if (!isAuthPanelOpen()) return;
+    if (els.authPanel.contains(event.target) || els.adminButton.contains(event.target)) return;
+    setAuthPanelOpen(false);
   });
 
   els.addButton.addEventListener("click", (event) => {
@@ -333,7 +351,7 @@ function setSearchPanelOpen(isOpen) {
 }
 
 function setAdminMode(isEnabled, { rerender = true } = {}) {
-  const nextValue = Boolean(isEnabled);
+  const nextValue = Boolean(isEnabled && state.auth.isAdmin);
 
   if (!nextValue && isSpotDialogOpen()) {
     closeSpotDialog({ restorePanel: !state.selectedId });
@@ -341,15 +359,185 @@ function setAdminMode(isEnabled, { rerender = true } = {}) {
 
   state.isAdminMode = nextValue;
   document.body.classList.toggle("is-admin-mode", nextValue);
-  els.adminButton.classList.toggle("is-active", nextValue);
-  els.adminButton.setAttribute("aria-pressed", String(nextValue));
-  els.adminButton.setAttribute("aria-label", nextValue ? "관리자 모드 끄기" : "관리자 모드 켜기");
   els.addButton.setAttribute("aria-hidden", String(!nextValue));
   els.addButton.tabIndex = nextValue ? 0 : -1;
+
+  renderAuthPanel();
 
   if (rerender) {
     render();
   }
+}
+
+function isAuthPanelOpen() {
+  return els.authPanel.classList.contains("is-open");
+}
+
+function setAuthPanelOpen(isOpen) {
+  const nextValue = Boolean(isOpen);
+  els.authPanel.classList.toggle("is-open", nextValue);
+  els.authPanel.setAttribute("aria-hidden", String(!nextValue));
+  els.adminButton.classList.toggle("is-active", nextValue);
+  els.adminButton.setAttribute("aria-expanded", String(nextValue));
+  renderAuthPanel();
+}
+
+function isMemberSignedIn() {
+  return Boolean(state.auth.user && !state.auth.user.is_anonymous);
+}
+
+function memberDisplayName() {
+  const metadata = state.auth.user?.user_metadata ?? {};
+  return (
+    state.auth.profile?.nickname ||
+    metadata.nickname ||
+    metadata.name ||
+    metadata.full_name ||
+    "까탈로그 회원"
+  );
+}
+
+function memberAvatarUrl() {
+  const metadata = state.auth.user?.user_metadata ?? {};
+  return state.auth.profile?.avatar_url || metadata.avatar_url || metadata.picture || "";
+}
+
+function renderAuthButton() {
+  const isMember = isMemberSignedIn();
+  const label = !isMember ? "로그인" : state.auth.isAdmin ? "관리자" : "회원";
+  els.adminButton.textContent = label;
+  els.adminButton.title = isMember ? "내 계정" : "로그인";
+  els.adminButton.setAttribute("aria-label", isMember ? `${memberDisplayName()} 계정` : "로그인");
+}
+
+function renderAuthPanel() {
+  if (!els.authPanel) return;
+  renderAuthButton();
+
+  if (state.auth.status === "loading") {
+    els.authPanel.innerHTML = '<p class="auth-status">계정을 확인하고 있습니다</p>';
+    return;
+  }
+
+  if (state.auth.status === "unavailable") {
+    els.authPanel.innerHTML = `
+      <div class="auth-panel-copy">
+        <strong>로그인을 준비하지 못했습니다</strong>
+        <p>${escapeHtml(state.auth.error || "Supabase 연결을 확인해주세요")}</p>
+      </div>
+    `;
+    return;
+  }
+
+  if (!isMemberSignedIn()) {
+    els.authPanel.innerHTML = `
+      <div class="auth-panel-copy">
+        <strong>까탈로그 시작하기</strong>
+        <p>방문을 인증하고 까탈리스트에 도전하세요</p>
+      </div>
+      <button class="kakao-login-button" type="button" data-auth-action="kakao">
+        <span class="kakao-symbol" aria-hidden="true">●</span>
+        <span>카카오로 시작하기</span>
+      </button>
+      ${state.auth.error ? `<p class="auth-error">${escapeHtml(state.auth.error)}</p>` : ""}
+    `;
+    return;
+  }
+
+  const avatarUrl = memberAvatarUrl();
+  const avatar = avatarUrl
+    ? `<img src="${escapeHtml(avatarUrl)}" alt="" referrerpolicy="no-referrer" />`
+    : `<span aria-hidden="true">${escapeHtml(memberDisplayName().slice(0, 1))}</span>`;
+  const roleLabel = state.auth.isAdmin ? "관리자" : state.auth.profile?.is_catalist ? "까탈리스트" : "회원";
+  const adminControl = state.auth.isAdmin
+    ? `
+      <button class="auth-secondary-button" type="button" data-auth-action="admin-mode" aria-pressed="${state.isAdminMode}">
+        ${state.isAdminMode ? "관리자 모드 종료" : "관리자 모드"}
+      </button>
+    `
+    : "";
+
+  els.authPanel.innerHTML = `
+    <div class="member-summary">
+      <span class="member-avatar">${avatar}</span>
+      <span class="member-copy">
+        <strong>${escapeHtml(memberDisplayName())}</strong>
+        <small>${roleLabel}</small>
+      </span>
+    </div>
+    <div class="auth-panel-actions">
+      ${adminControl}
+      <button class="auth-secondary-button" type="button" data-auth-action="logout">로그아웃</button>
+    </div>
+    ${state.auth.error ? `<p class="auth-error">${escapeHtml(state.auth.error)}</p>` : ""}
+  `;
+}
+
+async function handleAuthPanelClick(event) {
+  const button = event.target.closest("[data-auth-action]");
+  if (!button || button.disabled) return;
+
+  const action = button.dataset.authAction;
+  if (action === "admin-mode") {
+    setAdminMode(!state.isAdminMode);
+    return;
+  }
+
+  button.disabled = true;
+  state.auth.error = "";
+
+  try {
+    if (action === "kakao") {
+      await state.store?.signInWithKakao?.();
+    } else if (action === "logout") {
+      await state.store?.signOut?.();
+      setAuthPanelOpen(false);
+    }
+  } catch (error) {
+    console.warn("auth action failed", error);
+    state.auth.error = authErrorMessage(error);
+    renderAuthPanel();
+  } finally {
+    if (button.isConnected) button.disabled = false;
+  }
+}
+
+function authErrorMessage(error) {
+  const message = String(error?.message || "");
+  if (/provider.*disabled/i.test(message)) return "카카오 로그인 설정이 아직 완료되지 않았습니다";
+  return "로그인을 완료하지 못했습니다. 잠시 후 다시 시도해주세요";
+}
+
+async function syncAuthState(store) {
+  const revision = ++authSyncRevision;
+  state.auth.status = "loading";
+  state.auth.error = "";
+  renderAuthPanel();
+
+  try {
+    const memberContext = await store.getMemberContext();
+    if (revision !== authSyncRevision) return;
+
+    state.auth.status = "ready";
+    state.auth.user = memberContext.user;
+    state.auth.profile = memberContext.profile;
+    state.auth.isAdmin = memberContext.isAdmin;
+    if (!memberContext.isAdmin) {
+      setAdminMode(false, { rerender: false });
+    }
+  } catch (error) {
+    if (revision !== authSyncRevision) return;
+    console.warn("member context failed", error);
+    state.auth.status = "unavailable";
+    state.auth.user = null;
+    state.auth.profile = null;
+    state.auth.isAdmin = false;
+    state.auth.error = "회원 정보를 불러오지 못했습니다";
+    setAdminMode(false, { rerender: false });
+  }
+
+  renderAuthPanel();
+  render();
 }
 
 function isSearchPanelOpen() {
@@ -1445,13 +1633,17 @@ async function initializeDataStore() {
   if (!runtimeConfig.supabaseUrl || !runtimeConfig.supabaseAnonKey) {
     state.store = localStore;
     state.restaurants = localStore.list();
+    state.auth.status = "unavailable";
+    state.auth.error = "Supabase 설정이 필요합니다";
+    renderAuthPanel();
     return;
   }
 
   try {
     const supabaseStore = new SupabaseRestaurantStore(runtimeConfig);
-    await supabaseStore.init();
+    await supabaseStore.init(() => syncAuthState(supabaseStore));
     state.store = supabaseStore;
+    await syncAuthState(supabaseStore);
     const remoteRestaurants = await supabaseStore.list();
     state.restaurants =
       remoteRestaurants.length === 0 && hasLocalRestaurantData()
@@ -1461,6 +1653,9 @@ async function initializeDataStore() {
     console.warn("supabase init failed; falling back to local storage", error);
     state.store = localStore;
     state.restaurants = localStore.list();
+    state.auth.status = "unavailable";
+    state.auth.error = "Supabase 연결을 확인해주세요";
+    renderAuthPanel();
   }
 }
 
@@ -1509,14 +1704,16 @@ class SupabaseRestaurantStore {
     this.anonKey = config.supabaseAnonKey;
     this.client = null;
     this.userId = null;
+    this.session = null;
+    this.authSubscription = null;
   }
 
-  async init() {
+  async init(onAuthChange) {
     const { createClient } = await import(SUPABASE_SDK_URL);
     this.client = createClient(this.url, this.anonKey, {
       auth: {
         autoRefreshToken: true,
-        detectSessionInUrl: false,
+        detectSessionInUrl: true,
         persistSession: true,
         storageKey: "ccatalog.supabase.auth",
       },
@@ -1525,17 +1722,53 @@ class SupabaseRestaurantStore {
     const { data: sessionData, error: sessionError } = await this.client.auth.getSession();
     if (sessionError) throw sessionError;
 
-    let session = sessionData.session;
-    if (!session) {
-      const { data, error } = await this.client.auth.signInAnonymously();
-      if (error) throw error;
-      session = data.session;
+    this.setSession(sessionData.session);
+
+    const { data } = this.client.auth.onAuthStateChange((_event, session) => {
+      this.setSession(session);
+      window.setTimeout(() => onAuthChange?.(session), 0);
+    });
+    this.authSubscription = data.subscription;
+  }
+
+  setSession(session) {
+    this.session = session ?? null;
+    this.userId = session?.user?.id ?? null;
+  }
+
+  async getMemberContext() {
+    const user = this.session?.user ?? null;
+    if (!user || user.is_anonymous) {
+      return { user: null, profile: null, isAdmin: false };
     }
 
-    this.userId = session?.user?.id ?? null;
-    if (!this.userId) {
-      throw new Error("Supabase anonymous session was not created");
-    }
+    const [profileResult, adminResult] = await Promise.all([
+      this.client.from("profiles").select("id,nickname,avatar_url,is_catalist,catalist_qualified_at").eq("id", user.id).maybeSingle(),
+      this.client.from("admin_users").select("user_id").eq("user_id", user.id).maybeSingle(),
+    ]);
+
+    if (profileResult.error) throw profileResult.error;
+    if (adminResult.error) throw adminResult.error;
+
+    return {
+      user,
+      profile: profileResult.data,
+      isAdmin: Boolean(adminResult.data),
+    };
+  }
+
+  async signInWithKakao() {
+    const redirectTo = window.location.href.split(/[?#]/)[0];
+    const { error } = await this.client.auth.signInWithOAuth({
+      provider: "kakao",
+      options: { redirectTo },
+    });
+    if (error) throw error;
+  }
+
+  async signOut() {
+    const { error } = await this.client.auth.signOut({ scope: "local" });
+    if (error) throw error;
   }
 
   async list() {

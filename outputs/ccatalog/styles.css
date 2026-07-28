@@ -222,6 +222,7 @@ button {
 }
 
 .brand,
+.auth-panel,
 .bottom-dock,
 .restaurant-panel,
 .search-panel,
@@ -237,6 +238,7 @@ button {
 }
 
 .brand::before,
+.auth-panel::before,
 .bottom-dock::before,
 .restaurant-panel::before,
 .search-panel::before,
@@ -340,6 +342,139 @@ body.is-admin-mode .brand-add-button {
   opacity: 1;
   pointer-events: auto;
   transform: scale(1);
+}
+
+.auth-panel {
+  position: absolute;
+  z-index: 19;
+  top: 80px;
+  left: 18px;
+  display: grid;
+  width: min(300px, calc(100vw - 36px));
+  gap: 12px;
+  padding: 15px;
+  border-radius: 24px;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-8px) scale(0.98);
+  transform-origin: top left;
+  transition:
+    opacity 180ms ease,
+    transform 260ms cubic-bezier(0.24, 0.58, 0.24, 1);
+}
+
+.auth-panel.is-open {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0) scale(1);
+}
+
+.auth-panel-copy {
+  display: grid;
+  gap: 4px;
+}
+
+.auth-panel-copy strong {
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.auth-panel-copy p,
+.auth-status,
+.auth-error {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.auth-error {
+  color: var(--danger);
+}
+
+.kakao-login-button,
+.auth-secondary-button {
+  min-height: 42px;
+  border: 1px solid rgba(17, 24, 32, 0.09);
+  border-radius: 999px;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.kakao-login-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  background: rgba(254, 229, 0, 0.72);
+}
+
+.kakao-symbol {
+  font-size: 10px;
+}
+
+.member-summary {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 11px;
+}
+
+.member-avatar {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  overflow: hidden;
+  place-items: center;
+  border: 1px solid rgba(17, 24, 32, 0.08);
+  border-radius: 50%;
+  color: var(--soft-ink);
+  background: rgba(255, 255, 255, 0.34);
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.member-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.member-copy {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.member-copy strong {
+  overflow: hidden;
+  font-size: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.member-copy small {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.auth-panel-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.auth-secondary-button {
+  background: rgba(255, 255, 255, 0.28);
+}
+
+.kakao-login-button:disabled,
+.auth-secondary-button:disabled {
+  cursor: wait;
+  opacity: 0.56;
 }
 
 .brand-add-button span {
@@ -1564,6 +1699,12 @@ body.is-admin-mode .brand-add-button {
     top: calc(16px + env(safe-area-inset-top, 0px));
     left: calc(16px + env(safe-area-inset-left, 0px));
     right: calc(16px + env(safe-area-inset-right, 0px));
+  }
+
+  .auth-panel {
+    top: calc(70px + env(safe-area-inset-top, 0px));
+    left: calc(16px + env(safe-area-inset-left, 0px));
+    width: min(300px, calc(100vw - 32px));
   }
 
   .brand {

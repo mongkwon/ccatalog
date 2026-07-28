@@ -9,8 +9,8 @@
     <meta name="theme-color" content="#eef4f8" />
     <meta name="apple-mobile-web-app-title" content="까탈로그" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" />
-    <link rel="stylesheet" href="./styles.css?v=20260624-pin-center" />
-    <script defer src="./app.js?v=20260624-pin-center"></script>
+    <link rel="stylesheet" href="./styles.css?v=20260728-kakao-auth" />
+    <script defer src="./app.js?v=20260728-kakao-auth"></script>
   </head>
   <body>
     <main class="app-shell">
@@ -41,11 +41,12 @@
                 id="adminButton"
                 class="brand-admin-button"
                 type="button"
-                title="관리자 모드"
-                aria-label="관리자 모드 켜기"
-                aria-pressed="false"
+                title="계정"
+                aria-label="로그인"
+                aria-controls="authPanel"
+                aria-expanded="false"
               >
-                관리자
+                로그인
               </button>
               <button
                 id="addButton"
@@ -63,6 +64,8 @@
             </div>
           </div>
         </header>
+
+        <section id="authPanel" class="auth-panel" aria-label="회원 계정" aria-hidden="true" aria-live="polite"></section>
 
         <aside id="restaurantPanel" class="restaurant-panel is-open" aria-label="맛집 목록" aria-hidden="false">
           <div class="panel-meta">
