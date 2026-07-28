@@ -1764,7 +1764,7 @@ class SupabaseRestaurantStore {
   async signInWithKakao() {
     const redirectTo = window.location.href.split(/[?#]/)[0];
     const { error } = await this.client.auth.signInWithOAuth({
-      provider: "custom:kakao",
+      provider: "custom:kakao-test",
       options: {
         redirectTo,
       },
