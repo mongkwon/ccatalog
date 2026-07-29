@@ -1631,12 +1631,12 @@ async function centerMapOnUserLocation(adapter) {
 
   state.lastMapCoord = coord;
   const revealCoords = getInitialRestaurantRevealCoordinates(coord);
-  if (revealCoords.length > 1 && typeof adapter.fitToCoordinates === "function") {
-    adapter.fitToCoordinates(revealCoords);
-  } else {
-    adapter.panTo(coord);
-  }
   render();
+  if (revealCoords.length > 1 && typeof adapter.fitToCoordinates === "function") {
+    adapter.fitToCoordinates(revealCoords, { focusCoord: coord, focusTarget: "user" });
+  } else {
+    adapter.panTo(coord, { focusTarget: "user" });
+  }
 }
 
 function getUserLocationCoord() {
@@ -1714,13 +1714,18 @@ function isRestaurantNearby(restaurant, coord = state.userLocation) {
   );
 }
 
-function render() {
+function render({ skipMap = false } = {}) {
   const visibleRestaurants = getVisibleRestaurants();
   renderList(visibleRestaurants);
   renderMeta(visibleRestaurants);
   renderSelectedCard(visibleRestaurants);
-  state.map?.render(visibleRestaurants, state.selectedId, (id) => selectRestaurant(id, { closePanel: true }), state.userLocation);
+  if (!skipMap) renderMapMarkers(visibleRestaurants);
   updateDockIndicator();
+  return visibleRestaurants;
+}
+
+function renderMapMarkers(visibleRestaurants) {
+  state.map?.render(visibleRestaurants, state.selectedId, (id) => selectRestaurant(id, { closePanel: true }), state.userLocation);
 }
 
 function getVisibleRestaurants() {
@@ -2389,6 +2394,7 @@ function visitErrorMessage(error) {
 function selectRestaurant(id, { closePanel = false } = {}) {
   if (isPhotoDialogOpen()) closePhotoDialog();
   if (isProposalReviewDialogOpen()) closeProposalReviewDialog();
+  const shouldFocus = state.selectedId !== id || (closePanel && els.restaurantPanel.classList.contains("is-open"));
   if (closePanel) {
     closeFloatingPanels();
   }
@@ -2398,10 +2404,19 @@ function selectRestaurant(id, { closePanel = false } = {}) {
   }
   state.selectedId = id;
   const restaurant = state.restaurants.find((item) => item.id === id);
-  if (restaurant) {
-    state.map?.panTo({ lat: restaurant.lat, lng: restaurant.lng });
+  const visibleRestaurants = render({ skipMap: true });
+  if (closePanel && restaurant && shouldFocus) {
+    window.setTimeout(() => {
+      if (state.selectedId !== id || els.selectedCard.classList.contains("hidden")) return;
+      state.map?.panTo({ lat: restaurant.lat, lng: restaurant.lng }, { focusTarget: "selected" });
+      renderMapMarkers(getVisibleRestaurants());
+    }, 120);
+    return;
   }
-  render();
+  if (restaurant && shouldFocus) {
+    state.map?.panTo({ lat: restaurant.lat, lng: restaurant.lng }, { focusTarget: "selected" });
+  }
+  renderMapMarkers(visibleRestaurants);
 }
 
 function openSpotDialog(restaurant = null, { mode = "restaurant" } = {}) {
@@ -3522,6 +3537,7 @@ class NaverMapAdapter {
     this.map = null;
     this.markers = [];
     this.userMarker = null;
+    this.focusVersion = 0;
     this.clickHandler = null;
     this.clickListener = null;
   }
@@ -3617,25 +3633,102 @@ class NaverMapAdapter {
     return normaliseNaverCoord(this.map.getCenter());
   }
 
-  panTo(coord) {
-    this.map.panTo(new window.naver.maps.LatLng(coord.lat, coord.lng));
+  panTo(coord, { focusTarget = null } = {}) {
+    const focusVersion = this.beginFocus();
+    this.focusCoordinate(coord, focusVersion, focusTarget);
   }
 
-  fitToCoordinates(coords) {
+  fitToCoordinates(coords, { focusCoord = null, focusTarget = null } = {}) {
     const points = coords
       .filter(isValidCoordinate)
       .map((coord) => new window.naver.maps.LatLng(coord.lat, coord.lng));
     if (points.length < 2) {
       if (points[0]) {
-        this.map.panTo(points[0]);
+        this.panTo(normaliseNaverCoord(points[0]));
       }
       return;
     }
 
-    this.map.fitBounds(points, INITIAL_REVEAL_BOUNDS_OPTIONS);
+    const focusVersion = this.beginFocus();
+    const padding = this.applyViewportPadding();
+    const fitOptions = {
+      ...INITIAL_REVEAL_BOUNDS_OPTIONS,
+      bottom: Math.max(0, INITIAL_REVEAL_BOUNDS_OPTIONS.bottom - padding.bottom),
+    };
+    this.map.stop();
+    window.requestAnimationFrame(() => {
+      if (!this.map || focusVersion !== this.focusVersion) return;
+      this.map.fitBounds(points, fitOptions);
+      if (!focusCoord || !isValidCoordinate(focusCoord)) return;
+      window.requestAnimationFrame(() => {
+        if (!this.map || focusVersion !== this.focusVersion) return;
+        this.focusCoordinate(focusCoord, focusVersion, focusTarget);
+      });
+    });
+  }
+
+  beginFocus() {
+    this.focusVersion += 1;
+    return this.focusVersion;
+  }
+
+  focusCoordinate(coord, focusVersion, focusTarget) {
+    if (!this.map || focusVersion !== this.focusVersion || !isValidCoordinate(coord)) return;
+    this.map.stop();
+    const target = new window.naver.maps.LatLng(coord.lat, coord.lng);
+    const padding = this.getViewportPadding();
+    const hasList = els.restaurantPanel.classList.contains("is-open");
+    const hasDetail = !els.selectedCard.classList.contains("hidden");
+    if (hasDetail && !hasList) {
+      this.map.setOptions("padding", { top: 0, right: 0, bottom: 0, left: 0 });
+      this.map.updateBy(target, this.map.getZoom());
+      this.alignFocusedMarker(focusTarget, focusVersion);
+      return;
+    }
+    this.map.updateBy(target, this.map.getZoom());
+    this.applyViewportPadding(padding);
+    this.alignFocusedMarker(focusTarget, focusVersion);
+  }
+
+  alignFocusedMarker(focusTarget, focusVersion) {
+    if (!focusTarget) return;
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        if (!this.map || focusVersion !== this.focusVersion) return;
+        const markerSelector = focusTarget === "user" ? ".user-location-marker" : ".pin-marker.is-selected";
+        const markerRect = document.querySelector(markerSelector)?.getBoundingClientRect();
+        if (!markerRect || markerRect.width <= 0 || markerRect.height <= 0) return;
+        const mapRect = this.mapHost.getBoundingClientRect();
+        const cardTop = [...document.querySelectorAll(".restaurant-panel.is-open, .selected-card:not(.hidden)")]
+          .map((card) => card.getBoundingClientRect())
+          .filter((rect) => rect.width > 0 && rect.height > 0)
+          .reduce((top, rect) => Math.min(top, rect.top), mapRect.bottom);
+        const desiredY = (mapRect.top + Math.min(mapRect.bottom, cardTop)) / 2;
+        const actualY = markerRect.top + markerRect.height / 2;
+        const offsetY = actualY - desiredY;
+        if (Math.abs(offsetY) < 0.5) return;
+        this.map.panBy(new window.naver.maps.Point(0, offsetY));
+      });
+    });
+  }
+
+  getViewportPadding() {
+    const mapRect = this.mapHost.getBoundingClientRect();
+    const cardTop = [...document.querySelectorAll(".restaurant-panel.is-open, .selected-card:not(.hidden)")]
+      .map((card) => card.getBoundingClientRect())
+      .filter((rect) => rect.width > 0 && rect.height > 0)
+      .reduce((top, rect) => Math.min(top, rect.top), mapRect.bottom);
+    const bottom = Math.max(0, Math.min(mapRect.height - 80, Math.round(mapRect.bottom - cardTop)));
+    return { top: 0, right: 0, bottom, left: 0 };
+  }
+
+  applyViewportPadding(padding = this.getViewportPadding()) {
+    this.map.setOptions("padding", padding);
+    return padding;
   }
 
   destroy() {
+    this.beginFocus();
     this.markers.forEach((marker) => marker.setMap(null));
     this.markers = [];
     this.userMarker?.setMap(null);
