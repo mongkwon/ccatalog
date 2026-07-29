@@ -1769,6 +1769,119 @@ body.has-add-access .brand-add-button {
   line-height: 1.55;
 }
 
+.tutorial-visual {
+  display: grid;
+  min-height: 50px;
+  align-items: center;
+}
+
+.tutorial-purpose,
+.tutorial-medals,
+.tutorial-catalist-path {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+}
+
+.tutorial-purpose {
+  gap: 10px;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.tutorial-purpose img {
+  width: 34px;
+  height: 34px;
+}
+
+.tutorial-medals {
+  gap: 6px;
+}
+
+.tutorial-medals span {
+  display: flex;
+  min-width: 0;
+  height: 38px;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border: 1px solid rgba(17, 24, 32, 0.08);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.28);
+  color: var(--soft-ink);
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.tutorial-medals b {
+  font-size: 14px;
+  font-weight: 400;
+}
+
+.tutorial-catalist-path {
+  gap: 7px;
+}
+
+.tutorial-catalist-path span {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: none;
+  place-items: center;
+  border: 1px solid rgba(17, 24, 32, 0.1);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.3);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.tutorial-catalist-path i {
+  color: var(--muted);
+  font-size: 15px;
+  font-style: normal;
+}
+
+.tutorial-catalist-path strong {
+  display: grid;
+  min-width: 0;
+  height: 36px;
+  place-items: center;
+  border: 1px solid rgba(17, 24, 32, 0.1);
+  border-radius: 999px;
+  padding: 0 13px;
+  background: rgba(229, 233, 238, 0.72);
+  font-size: 12px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+@media (max-width: 390px) {
+  .tutorial-card {
+    gap: 14px;
+  }
+
+  .tutorial-medals span {
+    font-size: 10px;
+  }
+
+  .tutorial-catalist-path {
+    gap: 5px;
+  }
+
+  .tutorial-catalist-path span {
+    width: 27px;
+    height: 27px;
+  }
+
+  .tutorial-catalist-path strong {
+    padding: 0 10px;
+    font-size: 11px;
+  }
+}
+
 .tutorial-dots {
   display: flex;
   align-items: center;

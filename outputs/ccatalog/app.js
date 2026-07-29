@@ -1,5 +1,5 @@
 const STORAGE_KEY = "ccatalog.restaurants.v1";
-const TUTORIAL_STORAGE_KEY = "ccatalog.tutorial.v1";
+const TUTORIAL_STORAGE_KEY = "ccatalog.tutorial.v2";
 const SUPABASE_SDK_URL = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
 const SUPABASE_TABLE = "restaurants";
 const RESTAURANT_PHOTO_BUCKET = "restaurant-photos";
@@ -50,20 +50,23 @@ const TUTORIAL_STEPS = [
   {
     target: "restaurantPanel",
     placement: "top",
-    title: "맛집을 골라보세요",
-    description: "지도 핀이나 목록을 누르면 추천 메뉴와 사진을 확인할 수 있습니다.",
+    visual: "purpose",
+    title: "취향을 믿고 고르는 지도",
+    description: "수많은 리뷰 점수 대신, 운영자가 직접 고른 음식점을 추천 메뉴와 함께 기록합니다.",
   },
   {
     target: "bottomDock",
     placement: "top",
-    title: "취향에 맞게 좁혀보세요",
-    description: "메달을 누르거나 슬라이더를 밀어 원하는 등급만 빠르게 볼 수 있습니다.",
+    visual: "ratings",
+    title: "메달은 추천의 강도예요",
+    description: "동·은·금은 맛집 여부가 아니라 추천 강도를 나눕니다. 하단 필터로 원하는 메달만 볼 수 있습니다.",
   },
   {
     target: "adminButton",
     placement: "bottom",
-    title: "방문하고 까탈리스트가 되세요",
-    description: "로그인 후 세 곳에서 위치 인증과 등급 동의를 완료하면 새 맛집을 건의할 수 있습니다.",
+    visual: "catalist",
+    title: "세 번의 동의로 까탈리스트",
+    description: "현장에서 위치를 인증하고 현재 메달에 동의한 방문이 3곳이면, 새로운 음식점 등록을 건의할 수 있습니다.",
   },
 ];
 
@@ -266,6 +269,7 @@ function cacheElements() {
   els.tutorialStep = document.getElementById("tutorialStep");
   els.tutorialTitle = document.getElementById("tutorialTitle");
   els.tutorialDescription = document.getElementById("tutorialDescription");
+  els.tutorialVisual = document.getElementById("tutorialVisual");
   els.tutorialDots = document.getElementById("tutorialDots");
   els.tutorialBack = document.getElementById("tutorialBack");
   els.tutorialNext = document.getElementById("tutorialNext");
@@ -508,6 +512,7 @@ function renderTutorial() {
   els.tutorialStep.textContent = `${state.tutorialStep + 1} / ${TUTORIAL_STEPS.length}`;
   els.tutorialTitle.textContent = step.title;
   els.tutorialDescription.textContent = step.description;
+  els.tutorialVisual.innerHTML = renderTutorialVisual(step.visual);
   els.tutorialBack.disabled = state.tutorialStep === 0;
   els.tutorialNext.textContent = state.tutorialStep === TUTORIAL_STEPS.length - 1 ? "시작하기" : "다음";
   els.tutorialDots.innerHTML = TUTORIAL_STEPS.map(
@@ -515,6 +520,37 @@ function renderTutorial() {
   ).join("");
   els.tutorialCard.dataset.placement = step.placement;
   updateTutorialLayout();
+}
+
+function renderTutorialVisual(visual) {
+  if (visual === "ratings") {
+    return `
+      <div class="tutorial-medals" aria-label="메달 등급">
+        <span><b aria-hidden="true">🥉</b> 동메달</span>
+        <span><b aria-hidden="true">🥈</b> 은메달</span>
+        <span><b aria-hidden="true">🥇</b> 금메달</span>
+      </div>
+    `;
+  }
+
+  if (visual === "catalist") {
+    return `
+      <div class="tutorial-catalist-path" aria-label="방문 세 곳 인증 후 까탈리스트">
+        <span aria-hidden="true">1</span>
+        <span aria-hidden="true">2</span>
+        <span aria-hidden="true">3</span>
+        <i aria-hidden="true">→</i>
+        <strong>까탈리스트</strong>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="tutorial-purpose" aria-label="까탈로그의 기준">
+      <img src="./brand-mark.svg" alt="" />
+      <span>엄격한 취향으로 고른 맛집만</span>
+    </div>
+  `;
 }
 
 function updateTutorialLayout() {
