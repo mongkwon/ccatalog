@@ -1,0 +1,4 @@
+interface:
+  display_name: "SVG Liquid Glass"
+  short_description: "웹 UI에 크기 대응형 SVG 굴절 유리를 구현합니다"
+  default_prompt: "Use $build-svg-liquid-glass to implement a responsive SVG-displacement liquid glass control in this web project."
