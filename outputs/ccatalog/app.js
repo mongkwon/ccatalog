@@ -1415,17 +1415,6 @@ function getInitialRestaurantRevealCoordinates(origin) {
   return [origin, ...revealRestaurants.map((restaurant) => restaurant.coord)];
 }
 
-function mirrorRevealCoordinatesAroundOrigin(origin, coords) {
-  return coords.flatMap((coord, index) => {
-    if (index === 0) return [coord];
-    const mirroredCoord = {
-      lat: origin.lat * 2 - coord.lat,
-      lng: origin.lng * 2 - coord.lng,
-    };
-    return isValidCoordinate(mirroredCoord) ? [coord, mirroredCoord] : [coord];
-  });
-}
-
 function distanceKmBetween(start, end) {
   const earthRadiusKm = 6371;
   const startLat = toRadians(start.lat);
@@ -1643,7 +1632,7 @@ async function centerMapOnUserLocation(adapter) {
   state.lastMapCoord = coord;
   const revealCoords = getInitialRestaurantRevealCoordinates(coord);
   if (revealCoords.length > 1 && typeof adapter.fitToCoordinates === "function") {
-    adapter.fitToCoordinates(mirrorRevealCoordinatesAroundOrigin(coord, revealCoords), coord);
+    adapter.fitToCoordinates(revealCoords);
   } else {
     adapter.panTo(coord);
   }
@@ -2409,10 +2398,10 @@ function selectRestaurant(id, { closePanel = false } = {}) {
   }
   state.selectedId = id;
   const restaurant = state.restaurants.find((item) => item.id === id);
-  render();
   if (restaurant) {
     state.map?.panTo({ lat: restaurant.lat, lng: restaurant.lng });
   }
+  render();
 }
 
 function openSpotDialog(restaurant = null, { mode = "restaurant" } = {}) {
@@ -3485,11 +3474,9 @@ class MockMapAdapter {
     this.center = coord;
   }
 
-  fitToCoordinates(coords, focusCoord) {
+  fitToCoordinates(coords) {
     const [firstCoord] = coords.filter(isValidCoordinate);
-    if (focusCoord && isValidCoordinate(focusCoord)) {
-      this.center = focusCoord;
-    } else if (firstCoord) {
+    if (firstCoord) {
       this.center = firstCoord;
     }
   }
@@ -3535,8 +3522,6 @@ class NaverMapAdapter {
     this.map = null;
     this.markers = [];
     this.userMarker = null;
-    this.focusFrame = null;
-    this.focusIdleListener = null;
     this.clickHandler = null;
     this.clickListener = null;
   }
@@ -3633,58 +3618,24 @@ class NaverMapAdapter {
   }
 
   panTo(coord) {
-    const target = new window.naver.maps.LatLng(coord.lat, coord.lng);
-    const mapRect = this.mapHost.getBoundingClientRect();
-    const visiblePanel = document.querySelector(".selected-card:not(.hidden), .restaurant-panel.is-open");
-    const panelTop = visiblePanel?.getBoundingClientRect().top;
-    const visibleBottom = Number.isFinite(panelTop) ? Math.min(mapRect.bottom, panelTop) : mapRect.bottom;
-    const focusY = Math.max(0, visibleBottom - mapRect.top) / 2;
-    const centerY = mapRect.height / 2;
-    if (this.focusFrame !== null) window.cancelAnimationFrame(this.focusFrame);
-    this.map.setCenter(target);
-    this.focusFrame = window.requestAnimationFrame(() => {
-      const projection = this.map?.getProjection();
-      const adjustedCenter = projection?.fromOffsetToCoord?.(
-        new window.naver.maps.Point(mapRect.width / 2, centerY + (centerY - focusY))
-      );
-      if (adjustedCenter) this.map.setCenter(adjustedCenter);
-      this.focusFrame = null;
-    });
+    this.map.panTo(new window.naver.maps.LatLng(coord.lat, coord.lng));
   }
 
-  fitToCoordinates(coords, focusCoord) {
+  fitToCoordinates(coords) {
     const points = coords
       .filter(isValidCoordinate)
       .map((coord) => new window.naver.maps.LatLng(coord.lat, coord.lng));
     if (points.length < 2) {
-      const targetCoord = focusCoord && isValidCoordinate(focusCoord) ? focusCoord : points[0] ? normaliseNaverCoord(points[0]) : null;
-      if (targetCoord && isValidCoordinate(targetCoord)) {
-        this.panTo(targetCoord);
+      if (points[0]) {
+        this.map.panTo(points[0]);
       }
       return;
     }
 
-    if (this.focusIdleListener) {
-      window.naver.maps.Event.removeListener(this.focusIdleListener);
-      this.focusIdleListener = null;
-    }
-    if (focusCoord && isValidCoordinate(focusCoord)) {
-      this.focusIdleListener = window.naver.maps.Event.addListener(this.map, "idle", () => {
-        window.naver.maps.Event.removeListener(this.focusIdleListener);
-        this.focusIdleListener = null;
-        this.panTo(focusCoord);
-      });
-    }
     this.map.fitBounds(points, INITIAL_REVEAL_BOUNDS_OPTIONS);
   }
 
   destroy() {
-    if (this.focusFrame !== null) window.cancelAnimationFrame(this.focusFrame);
-    this.focusFrame = null;
-    if (this.focusIdleListener) {
-      window.naver?.maps?.Event?.removeListener(this.focusIdleListener);
-      this.focusIdleListener = null;
-    }
     this.markers.forEach((marker) => marker.setMap(null));
     this.markers = [];
     this.userMarker?.setMap(null);
