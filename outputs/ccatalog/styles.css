@@ -1,3 +1,11 @@
+@font-face {
+  font-family: "Grand Hotel";
+  src: url("./fonts/GrandHotel-Regular.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
 :root {
   --ink: #111820;
   --soft-ink: rgba(17, 24, 32, 0.74);
@@ -609,12 +617,27 @@ body.has-add-access .brand-add-button {
 }
 
 .brand h1 {
+  display: flex;
   margin: 0;
-  font-size: 19px;
-  font-weight: 800;
-  line-height: 1.05;
+  align-items: center;
+  gap: 7px;
+  font-family: "Grand Hotel", cursive;
+  font-size: 29px;
+  font-weight: 400;
+  line-height: 0.82;
   letter-spacing: 0;
   text-align: center;
+}
+
+.brand-mark {
+  display: block;
+  width: 29px;
+  height: 29px;
+  flex: none;
+}
+
+.brand-wordmark {
+  transform: translateY(1px);
 }
 
 .icon-button {
@@ -2592,7 +2615,12 @@ body.has-add-access .brand-add-button {
   }
 
   .brand h1 {
-    font-size: 17px;
+    font-size: 27px;
+  }
+
+  .brand-mark {
+    width: 27px;
+    height: 27px;
   }
 
   .brand-admin-button,
