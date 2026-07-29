@@ -1643,8 +1643,7 @@ async function centerMapOnUserLocation(adapter) {
   state.lastMapCoord = coord;
   const revealCoords = getInitialRestaurantRevealCoordinates(coord);
   if (revealCoords.length > 1 && typeof adapter.fitToCoordinates === "function") {
-    adapter.fitToCoordinates(mirrorRevealCoordinatesAroundOrigin(coord, revealCoords));
-    adapter.panTo(coord);
+    adapter.fitToCoordinates(mirrorRevealCoordinatesAroundOrigin(coord, revealCoords), coord);
   } else {
     adapter.panTo(coord);
   }
@@ -3486,9 +3485,11 @@ class MockMapAdapter {
     this.center = coord;
   }
 
-  fitToCoordinates(coords) {
+  fitToCoordinates(coords, focusCoord) {
     const [firstCoord] = coords.filter(isValidCoordinate);
-    if (firstCoord) {
+    if (focusCoord && isValidCoordinate(focusCoord)) {
+      this.center = focusCoord;
+    } else if (firstCoord) {
       this.center = firstCoord;
     }
   }
@@ -3535,6 +3536,7 @@ class NaverMapAdapter {
     this.markers = [];
     this.userMarker = null;
     this.focusFrame = null;
+    this.focusIdleListener = null;
     this.clickHandler = null;
     this.clickListener = null;
   }
@@ -3650,23 +3652,39 @@ class NaverMapAdapter {
     });
   }
 
-  fitToCoordinates(coords) {
+  fitToCoordinates(coords, focusCoord) {
     const points = coords
       .filter(isValidCoordinate)
       .map((coord) => new window.naver.maps.LatLng(coord.lat, coord.lng));
     if (points.length < 2) {
-      if (points[0]) {
-        this.panTo(normaliseNaverCoord(points[0]));
+      const targetCoord = focusCoord && isValidCoordinate(focusCoord) ? focusCoord : points[0] ? normaliseNaverCoord(points[0]) : null;
+      if (targetCoord && isValidCoordinate(targetCoord)) {
+        this.panTo(targetCoord);
       }
       return;
     }
 
+    if (this.focusIdleListener) {
+      window.naver.maps.Event.removeListener(this.focusIdleListener);
+      this.focusIdleListener = null;
+    }
+    if (focusCoord && isValidCoordinate(focusCoord)) {
+      this.focusIdleListener = window.naver.maps.Event.addListener(this.map, "idle", () => {
+        window.naver.maps.Event.removeListener(this.focusIdleListener);
+        this.focusIdleListener = null;
+        this.panTo(focusCoord);
+      });
+    }
     this.map.fitBounds(points, INITIAL_REVEAL_BOUNDS_OPTIONS);
   }
 
   destroy() {
     if (this.focusFrame !== null) window.cancelAnimationFrame(this.focusFrame);
     this.focusFrame = null;
+    if (this.focusIdleListener) {
+      window.naver?.maps?.Event?.removeListener(this.focusIdleListener);
+      this.focusIdleListener = null;
+    }
     this.markers.forEach((marker) => marker.setMap(null));
     this.markers = [];
     this.userMarker?.setMap(null);
