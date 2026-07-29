@@ -1115,14 +1115,60 @@ body.has-add-access .brand-add-button {
 }
 
 .visit-verification {
+  display: grid;
+  gap: 7px;
   margin-top: 12px;
+  border: 1px solid rgba(17, 24, 32, 0.08);
+  border-radius: 16px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.18);
 }
 
-.visit-action-row {
+.visit-verification.is-nearby {
+  border-color: rgba(71, 102, 112, 0.2);
+  background: rgba(224, 234, 237, 0.42);
+}
+
+.visit-verification.is-locked {
+  color: var(--muted);
+}
+
+.visit-verification.is-declined {
+  border-color: rgba(17, 24, 32, 0.07);
+  background: rgba(241, 242, 243, 0.42);
+}
+
+.visit-title,
+.visit-distance {
+  margin: 0 !important;
+  overflow-wrap: anywhere;
+}
+
+.visit-title {
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 850;
+  line-height: 1.4;
+}
+
+.visit-distance {
+  color: var(--soft-ink);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.visit-action-row,
+.visit-choice-row {
   display: flex;
   min-width: 0;
   align-items: center;
   gap: 7px;
+}
+
+.visit-choice-row > button {
+  min-width: 0;
+  flex: 1;
 }
 
 .visit-agreement {
@@ -1151,6 +1197,7 @@ body.has-add-access .brand-add-button {
 }
 
 .visit-confirm-button,
+.visit-choice-button,
 .visit-login-button,
 .visit-confirmed-label {
   display: inline-flex;
@@ -1169,7 +1216,8 @@ body.has-add-access .brand-add-button {
 }
 
 .visit-confirm-button {
-  flex: 0 0 auto;
+  width: 100%;
+  flex: 1;
 }
 
 .visit-confirm-button:disabled {
@@ -1181,6 +1229,10 @@ body.has-add-access .brand-add-button {
   width: 100%;
 }
 
+.visit-choice-button {
+  background: rgba(255, 255, 255, 0.2);
+}
+
 .visit-confirmed-label {
   border-color: rgba(72, 112, 97, 0.16);
   color: #355f50;
@@ -1188,7 +1240,7 @@ body.has-add-access .brand-add-button {
 }
 
 .visit-feedback {
-  margin-top: 6px !important;
+  margin: 0 !important;
   color: var(--soft-ink);
   font-size: 10px;
   font-weight: 700;
@@ -1598,6 +1650,53 @@ body.has-add-access .brand-add-button {
   box-shadow:
     0 0 0 8px color-mix(in srgb, var(--medal-color) 16%, transparent),
     0 1px 0 rgba(17, 24, 32, 0.04);
+}
+
+.pin-marker.is-nearby {
+  z-index: 8;
+}
+
+.pin-marker.is-nearby .pin-head {
+  border-color: rgba(60, 94, 106, 0.42);
+  background: rgba(214, 232, 237, 0.88);
+  box-shadow:
+    0 0 0 7px rgba(93, 135, 147, 0.16),
+    0 0 0 13px rgba(93, 135, 147, 0.07);
+}
+
+.pin-marker.is-nearby.is-selected .pin-head {
+  box-shadow:
+    0 0 0 8px rgba(93, 135, 147, 0.2),
+    0 0 0 15px rgba(93, 135, 147, 0.08);
+}
+
+.user-location-marker {
+  position: absolute;
+  z-index: 9;
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.96);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: 0 0 0 5px rgba(48, 119, 196, 0.17);
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+}
+
+.user-location-marker span {
+  width: 11px;
+  height: 11px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: #287dcc;
+  box-shadow: 0 1px 3px rgba(18, 70, 117, 0.25);
+}
+
+#map .user-location-marker {
+  position: relative;
+  transform: none;
 }
 
 .modal {

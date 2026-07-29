@@ -26,6 +26,8 @@ const INITIAL_REVEAL_BOUNDS_OPTIONS = {
 const USER_LOCATION_TIMEOUT_MS = 7000;
 const USER_LOCATION_MAX_AGE_MS = 5 * 60 * 1000;
 const VISIT_LOCATION_TIMEOUT_MS = 12000;
+const VISIT_RADIUS_METERS = 500;
+const VISIT_MAX_ACCURACY_METERS = 200;
 const MOCK_BOUNDS = {
   latMin: 37.47,
   latMax: 37.62,
@@ -142,6 +144,14 @@ const state = {
   isAdminMode: false,
   map: null,
   lastMapCoord: DEFAULT_CENTER,
+  userLocation: null,
+  visitFlow: {
+    restaurantId: null,
+    step: "prompt",
+    coords: null,
+    message: "",
+    error: false,
+  },
   placeSelection: null,
   spotDialogMode: "restaurant",
   photoDialogRestaurantId: null,
@@ -181,6 +191,7 @@ const dockDragState = {
 let spotDialogOpenFrame = null;
 let dockIndicatorUpdateTimer = null;
 let authSyncRevision = 0;
+let userLocationWatchId = null;
 
 document.addEventListener("DOMContentLoaded", init);
 document.addEventListener("gesturestart", preventPageZoom, { passive: false });
@@ -188,6 +199,7 @@ document.addEventListener("gesturechange", preventPageZoom, { passive: false });
 document.addEventListener("gestureend", preventPageZoom, { passive: false });
 document.addEventListener("wheel", preventPageZoom, { passive: false });
 document.addEventListener("keydown", preventPageZoomShortcut);
+window.addEventListener("pagehide", stopUserLocationWatch);
 
 async function init() {
   cacheElements();
@@ -1604,11 +1616,18 @@ async function activateMap(adapter) {
   state.map = adapter;
   state.lastMapCoord = adapter.getCenter();
   centerMapOnUserLocation(adapter);
+  startUserLocationWatch();
 }
 
 async function centerMapOnUserLocation(adapter) {
   const coord = await getUserLocationCoord().catch(() => null);
-  if (!coord || state.map !== adapter || state.selectedId) return;
+  if (!coord || state.map !== adapter) return;
+
+  updateUserLocation(coord, { rerender: false });
+  if (state.selectedId) {
+    render();
+    return;
+  }
 
   state.lastMapCoord = coord;
   const revealCoords = getInitialRestaurantRevealCoordinates(coord);
@@ -1617,6 +1636,7 @@ async function centerMapOnUserLocation(adapter) {
   } else {
     adapter.panTo(coord);
   }
+  render();
 }
 
 function getUserLocationCoord() {
@@ -1630,6 +1650,7 @@ function getUserLocationCoord() {
         const coord = {
           lat: Number(position.coords.latitude),
           lng: Number(position.coords.longitude),
+          accuracy: Number(position.coords.accuracy),
         };
         resolve(isValidCoordinate(coord) ? coord : null);
       },
@@ -1643,12 +1664,62 @@ function getUserLocationCoord() {
   });
 }
 
+function startUserLocationWatch() {
+  stopUserLocationWatch();
+  if (!navigator.geolocation) return;
+
+  userLocationWatchId = navigator.geolocation.watchPosition(
+    (position) => {
+      const coord = {
+        lat: Number(position.coords.latitude),
+        lng: Number(position.coords.longitude),
+        accuracy: Number(position.coords.accuracy),
+      };
+      if (!isValidCoordinate(coord) || !Number.isFinite(coord.accuracy)) return;
+      updateUserLocation(coord);
+    },
+    () => {},
+    {
+      enableHighAccuracy: true,
+      maximumAge: 15000,
+      timeout: VISIT_LOCATION_TIMEOUT_MS,
+    }
+  );
+}
+
+function stopUserLocationWatch() {
+  if (userLocationWatchId === null || !navigator.geolocation) return;
+  navigator.geolocation.clearWatch(userLocationWatchId);
+  userLocationWatchId = null;
+}
+
+function updateUserLocation(coord, { rerender = true } = {}) {
+  state.userLocation = coord;
+  state.map?.setUserLocation?.(coord);
+  if (rerender) render();
+}
+
+function restaurantDistanceMeters(restaurant, coord = state.userLocation) {
+  if (!restaurant || !coord || !isValidCoordinate(coord)) return null;
+  return Math.round(distanceKmBetween(coord, restaurant) * 1000);
+}
+
+function isRestaurantNearby(restaurant, coord = state.userLocation) {
+  const distance = restaurantDistanceMeters(restaurant, coord);
+  return (
+    distance !== null &&
+    distance <= VISIT_RADIUS_METERS &&
+    Number.isFinite(coord?.accuracy) &&
+    coord.accuracy <= VISIT_MAX_ACCURACY_METERS
+  );
+}
+
 function render() {
   const visibleRestaurants = getVisibleRestaurants();
   renderList(visibleRestaurants);
   renderMeta(visibleRestaurants);
   renderSelectedCard(visibleRestaurants);
-  state.map?.render(visibleRestaurants, state.selectedId, (id) => selectRestaurant(id, { closePanel: true }));
+  state.map?.render(visibleRestaurants, state.selectedId, (id) => selectRestaurant(id, { closePanel: true }), state.userLocation);
   updateDockIndicator();
 }
 
@@ -1770,13 +1841,21 @@ function renderSelectedCard(visibleRestaurants) {
   els.selectedCard.querySelector('[data-action="visit-login"]')?.addEventListener("click", () => {
     setAuthPanelOpen(true);
   });
-  const visitAgreement = els.selectedCard.querySelector("[data-visit-agreement]");
-  const visitButton = els.selectedCard.querySelector('[data-action="confirm-visit"]');
-  visitAgreement?.addEventListener("change", () => {
-    if (visitButton) visitButton.disabled = !visitAgreement.checked;
+  els.selectedCard.querySelector('[data-action="begin-visit"]')?.addEventListener("click", (event) => {
+    beginVisitVerification(restaurant, event.currentTarget);
   });
-  visitButton?.addEventListener("click", () => {
-    confirmRestaurantVisit(restaurant, visitButton);
+  els.selectedCard.querySelector('[data-action="agree-visit"]')?.addEventListener("click", (event) => {
+    confirmRestaurantVisit(restaurant, event.currentTarget, state.visitFlow.coords);
+  });
+  els.selectedCard.querySelector('[data-action="decline-visit"]')?.addEventListener("click", () => {
+    state.visitFlow = {
+      restaurantId: restaurant.id,
+      step: "declined",
+      coords: null,
+      message: "마음에 들지 않으셨나 봐요. 다른 장소에서도 다시 확인해보세요.",
+      error: false,
+    };
+    render();
   });
   els.selectedCard.classList.remove("hidden");
 }
@@ -2093,61 +2172,139 @@ function renderPhotoViewer() {
 }
 
 function renderVisitControl(restaurant) {
+  const isNearby = isRestaurantNearby(restaurant);
+  const distance = restaurantDistanceMeters(restaurant);
+  const flow = state.visitFlow.restaurantId === restaurant.id ? state.visitFlow : null;
+
   if (!isMemberSignedIn()) {
     return `
-      <div class="visit-verification">
-        <button class="visit-login-button" type="button" data-action="visit-login">로그인 후 방문 인증</button>
+      <div class="visit-verification${isNearby ? " is-nearby" : " is-locked"}">
+        <p class="visit-title">${isNearby ? `현재 ${escapeHtml(restaurant.name)} 근처에 있어요!` : "500m 안에 도착하면 방문 인증이 열려요"}</p>
+        <p class="visit-distance">${visitDistanceLabel(distance)}</p>
+        ${isNearby ? '<button class="visit-login-button" type="button" data-action="visit-login">로그인하고 방문 인증</button>' : ""}
       </div>
     `;
   }
 
   if (state.auth.visitedRestaurantIds.includes(restaurant.id)) {
+    const successMessage = flow?.step === "success" ? flow.message : "이 음식점의 방문 인증을 완료했어요.";
     return `
       <div class="visit-verification is-confirmed">
         <span class="visit-confirmed-label">방문 확인됨</span>
+        <p class="visit-feedback">${escapeHtml(successMessage)}</p>
+      </div>
+    `;
+  }
+
+  if (!isNearby) {
+    return `
+      <div class="visit-verification is-locked">
+        <p class="visit-title">500m 안에 도착하면 방문 인증이 열려요</p>
+        <p class="visit-distance">${visitDistanceLabel(distance)}</p>
       </div>
     `;
   }
 
   const rating = RATING_META[restaurant.rating];
-  return `
-    <div class="visit-verification">
-      <div class="visit-action-row">
-        <label class="visit-agreement">
-          <input type="checkbox" data-visit-agreement />
-          <span>${escapeHtml(`${rating.icon} ${rating.label} 평가에 동의`)}</span>
-        </label>
-        <button class="visit-confirm-button" type="button" data-action="confirm-visit" disabled>방문 인증</button>
+  if (flow?.step === "agreement") {
+    return `
+      <div class="visit-verification is-nearby">
+        <p class="visit-title">${escapeHtml(`${rating.icon} ${rating.label} 평가에 동의하시나요?`)}</p>
+        <div class="visit-choice-row">
+          <button class="visit-choice-button" type="button" data-action="decline-visit">아니요</button>
+          <button class="visit-confirm-button" type="button" data-action="agree-visit">네</button>
+        </div>
+        <p class="visit-feedback" aria-live="polite"></p>
       </div>
-      <p class="visit-feedback" aria-live="polite"></p>
+    `;
+  }
+
+  if (flow?.step === "declined") {
+    return `
+      <div class="visit-verification is-declined">
+        <p class="visit-title">${escapeHtml(flow.message)}</p>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="visit-verification is-nearby">
+      <p class="visit-title">현재 ${escapeHtml(restaurant.name)} 근처에 있어요!</p>
+      <p class="visit-distance">${visitDistanceLabel(distance)} · 방문 인증할까요?</p>
+      <button class="visit-confirm-button" type="button" data-action="begin-visit">방문 인증</button>
+      <p class="visit-feedback${flow?.error ? " is-error" : ""}" aria-live="polite">${escapeHtml(flow?.message || "")}</p>
     </div>
   `;
 }
 
-async function confirmRestaurantVisit(restaurant, button) {
+function visitDistanceLabel(distance) {
+  if (distance === null) return "현재 위치 확인 중";
+  if (distance < 1000) return `${distance.toLocaleString("ko-KR")}m 거리`;
+  return `${(distance / 1000).toFixed(distance < 10000 ? 1 : 0)}km 거리`;
+}
+
+async function beginVisitVerification(restaurant, button) {
   if (!isMemberSignedIn() || typeof state.store?.confirmRestaurantVisit !== "function") {
     setAuthPanelOpen(true);
     return;
   }
 
-  const container = button.closest(".visit-verification");
-  const agreement = container?.querySelector("[data-visit-agreement]");
-  const feedback = container?.querySelector(".visit-feedback");
-  if (!agreement?.checked || !feedback) return;
-
   button.disabled = true;
-  agreement.disabled = true;
   button.textContent = "위치 확인 중";
-  feedback.textContent = "현재 위치를 확인하고 있습니다";
-  feedback.classList.remove("is-error");
 
   try {
     const location = await getVisitVerificationLocation();
     if (location.error) throw new Error(location.error);
+    updateUserLocation(location.coords, { rerender: false });
+    if (!isRestaurantNearby(restaurant, location.coords)) {
+      const distance = restaurantDistanceMeters(restaurant, location.coords);
+      throw new Error(distance !== null && distance > VISIT_RADIUS_METERS ? "too_far" : "location_inaccurate");
+    }
 
-    button.textContent = "확인 중";
-    feedback.textContent = "음식점과의 거리를 확인하고 있습니다";
-    const result = await state.store.confirmRestaurantVisit(restaurant, location.coords);
+    state.visitFlow = {
+      restaurantId: restaurant.id,
+      step: "agreement",
+      coords: location.coords,
+      message: "",
+      error: false,
+    };
+    render();
+  } catch (error) {
+    console.warn("visit location check failed", error);
+    state.visitFlow = {
+      restaurantId: restaurant.id,
+      step: "prompt",
+      coords: null,
+      message: visitErrorMessage(error),
+      error: true,
+    };
+    render();
+  }
+}
+
+async function confirmRestaurantVisit(restaurant, button, coords) {
+  if (!isMemberSignedIn() || typeof state.store?.confirmRestaurantVisit !== "function") {
+    setAuthPanelOpen(true);
+    return;
+  }
+
+  if (!coords || !isRestaurantNearby(restaurant, coords)) {
+    state.visitFlow = {
+      restaurantId: restaurant.id,
+      step: "prompt",
+      coords: null,
+      message: "위치를 다시 확인해주세요.",
+      error: true,
+    };
+    render();
+    return;
+  }
+
+  button.disabled = true;
+  button.textContent = "확인 중";
+
+  try {
+    const result = await state.store.confirmRestaurantVisit(restaurant, coords);
 
     state.auth.visitedRestaurantIds = [...state.auth.visitedRestaurantIds, restaurant.id];
     state.auth.visitCount = result.visit_count;
@@ -2159,15 +2316,28 @@ async function confirmRestaurantVisit(restaurant, button) {
     } else {
       updateAddButtonAccess();
     }
+    const remainingVisits = Math.max(0, 3 - result.visit_count);
+    state.visitFlow = {
+      restaurantId: restaurant.id,
+      step: "success",
+      coords: null,
+      message: result.is_catalist
+        ? "까탈리스트가 되었어요! 이제 새로운 맛집을 건의할 수 있어요."
+        : `앞으로 ${remainingVisits}곳만 더 방문하면 까탈리스트가 돼요.`,
+      error: false,
+    };
     renderAuthPanel();
     render();
   } catch (error) {
     console.warn("visit confirmation failed", error);
-    feedback.textContent = visitErrorMessage(error);
-    feedback.classList.add("is-error");
-    button.textContent = "방문 인증";
-    agreement.disabled = false;
-    button.disabled = !agreement.checked;
+    state.visitFlow = {
+      restaurantId: restaurant.id,
+      step: "prompt",
+      coords: null,
+      message: visitErrorMessage(error),
+      error: true,
+    };
+    render();
   }
 }
 
@@ -2209,7 +2379,7 @@ function visitErrorMessage(error) {
   if (message.includes("location_timeout")) return "위치 확인 시간이 초과됐습니다. 다시 시도해주세요";
   if (message.includes("location_unavailable") || message.includes("location_unsupported")) return "현재 위치를 확인할 수 없습니다";
   if (message.includes("location_inaccurate")) return "위치 정확도가 낮습니다. 창가나 야외에서 다시 시도해주세요";
-  if (message.includes("too_far")) return "음식점에서 200m 이내일 때 인증할 수 있습니다";
+  if (message.includes("too_far")) return "음식점에서 500m 이내일 때 인증할 수 있습니다";
   if (message.includes("already_confirmed")) return "이미 방문 인증한 음식점입니다";
   if (message.includes("rating_changed")) return "등급이 변경됐습니다. 상세 정보를 다시 확인해주세요";
   if (message.includes("agreement_required")) return "현재 메달 평가에 동의해주세요";
@@ -2223,6 +2393,9 @@ function selectRestaurant(id, { closePanel = false } = {}) {
     closeFloatingPanels();
   }
 
+  if (state.selectedId !== id) {
+    state.visitFlow = { restaurantId: id, step: "prompt", coords: null, message: "", error: false };
+  }
   state.selectedId = id;
   const restaurant = state.restaurants.find((item) => item.id === id);
   if (restaurant) {
@@ -2621,14 +2794,15 @@ function pinSymbol(rating) {
   return RATING_META[rating].icon;
 }
 
-function createPinElement(restaurant, selectedId, onSelect) {
+function createPinElement(restaurant, selectedId, onSelect, userLocation) {
   const { rating } = restaurant;
   const meta = RATING_META[rating];
   const button = document.createElement("button");
   button.type = "button";
-  button.className = `pin-marker${restaurant.id === selectedId ? " is-selected" : ""}`;
+  const isNearby = isRestaurantNearby(restaurant, userLocation) && !state.auth.visitedRestaurantIds.includes(restaurant.id);
+  button.className = `pin-marker${restaurant.id === selectedId ? " is-selected" : ""}${isNearby ? " is-nearby" : ""}`;
   button.dataset.rating = String(rating);
-  button.setAttribute("aria-label", `${restaurant.name} ${meta.label}`);
+  button.setAttribute("aria-label", `${restaurant.name} ${meta.label}${isNearby ? " 방문 인증 가능" : ""}`);
   button.innerHTML = `
     <span class="pin-head">
       <span class="pin-level">${pinSymbol(rating)}</span>
@@ -2641,12 +2815,13 @@ function createPinElement(restaurant, selectedId, onSelect) {
   return button;
 }
 
-function pinHtml(restaurant, selectedId) {
+function pinHtml(restaurant, selectedId, userLocation) {
   const selectedClass = restaurant.id === selectedId ? " is-selected" : "";
+  const nearbyClass = isRestaurantNearby(restaurant, userLocation) && !state.auth.visitedRestaurantIds.includes(restaurant.id) ? " is-nearby" : "";
   const { rating } = restaurant;
   const meta = RATING_META[rating];
   return `
-    <button class="pin-marker${selectedClass}" data-rating="${rating}" aria-label="${escapeHtml(restaurant.name)} ${meta.label}">
+    <button class="pin-marker${selectedClass}${nearbyClass}" data-rating="${rating}" aria-label="${escapeHtml(restaurant.name)} ${meta.label}${nearbyClass ? " 방문 인증 가능" : ""}">
       <span class="pin-head">
         <span class="pin-level">${pinSymbol(rating)}</span>
       </span>
@@ -3262,11 +3437,21 @@ class MockMapAdapter {
     this.mockMap.addEventListener("click", this.onMapClick);
   }
 
-  render(restaurants, selectedId, onSelect) {
+  render(restaurants, selectedId, onSelect, userLocation) {
     this.pinsLayer.innerHTML = "";
     const fragment = document.createDocumentFragment();
+    if (userLocation && isValidCoordinate(userLocation)) {
+      const userMarker = document.createElement("div");
+      userMarker.className = "user-location-marker";
+      userMarker.setAttribute("aria-label", "현재 위치");
+      userMarker.innerHTML = '<span aria-hidden="true"></span>';
+      const userPosition = this.coordToPoint(userLocation);
+      userMarker.style.left = `${userPosition.x}%`;
+      userMarker.style.top = `${userPosition.y}%`;
+      fragment.append(userMarker);
+    }
     restaurants.forEach((restaurant) => {
-      const pin = createPinElement(restaurant, selectedId, onSelect);
+      const pin = createPinElement(restaurant, selectedId, onSelect, userLocation);
       const position = this.coordToPoint({ lat: restaurant.lat, lng: restaurant.lng });
       pin.style.left = `${position.x}%`;
       pin.style.top = `${position.y}%`;
@@ -3274,6 +3459,8 @@ class MockMapAdapter {
     });
     this.pinsLayer.append(fragment);
   }
+
+  setUserLocation() {}
 
   setClickHandler(handler) {
     this.clickHandler = handler;
@@ -3334,6 +3521,7 @@ class NaverMapAdapter {
     this.key = key;
     this.map = null;
     this.markers = [];
+    this.userMarker = null;
     this.clickHandler = null;
     this.clickListener = null;
   }
@@ -3378,7 +3566,7 @@ class NaverMapAdapter {
     }
   }
 
-  render(restaurants, selectedId, onSelect) {
+  render(restaurants, selectedId, onSelect, userLocation) {
     this.markers.forEach((marker) => marker.setMap(null));
     this.markers = restaurants.map((restaurant) => {
       const marker = new window.naver.maps.Marker({
@@ -3386,12 +3574,38 @@ class NaverMapAdapter {
         map: this.map,
         title: restaurant.name,
         icon: {
-          content: pinHtml(restaurant, selectedId),
+          content: pinHtml(restaurant, selectedId, userLocation),
           anchor: new window.naver.maps.Point(22, 22),
         },
       });
       window.naver.maps.Event.addListener(marker, "click", () => onSelect(restaurant.id));
       return marker;
+    });
+    this.setUserLocation(userLocation);
+  }
+
+  setUserLocation(coord) {
+    if (!coord || !isValidCoordinate(coord) || !this.map) {
+      this.userMarker?.setMap(null);
+      this.userMarker = null;
+      return;
+    }
+
+    const position = new window.naver.maps.LatLng(coord.lat, coord.lng);
+    if (this.userMarker) {
+      this.userMarker.setPosition(position);
+      return;
+    }
+
+    this.userMarker = new window.naver.maps.Marker({
+      position,
+      map: this.map,
+      zIndex: 120,
+      title: "현재 위치",
+      icon: {
+        content: '<div class="user-location-marker" aria-label="현재 위치"><span aria-hidden="true"></span></div>',
+        anchor: new window.naver.maps.Point(12, 12),
+      },
     });
   }
 
@@ -3424,6 +3638,8 @@ class NaverMapAdapter {
   destroy() {
     this.markers.forEach((marker) => marker.setMap(null));
     this.markers = [];
+    this.userMarker?.setMap(null);
+    this.userMarker = null;
     if (this.clickListener) {
       window.naver?.maps?.Event?.removeListener(this.clickListener);
     }
