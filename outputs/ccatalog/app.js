@@ -23,6 +23,10 @@ const INITIAL_REVEAL_BOUNDS_OPTIONS = {
   left: 56,
   maxZoom: INITIAL_MAP_ZOOM,
 };
+const MAP_FOCUS_TRANSITION = {
+  duration: 420,
+  easing: "easeOutCubic",
+};
 const USER_LOCATION_TIMEOUT_MS = 7000;
 const USER_LOCATION_MAX_AGE_MS = 5 * 60 * 1000;
 const VISIT_LOCATION_TIMEOUT_MS = 12000;
@@ -3675,29 +3679,34 @@ class NaverMapAdapter {
   focusCoordinate(coord, focusVersion, focusTarget) {
     if (!this.map || focusVersion !== this.focusVersion || !isValidCoordinate(coord)) return;
     this.map.stop();
+    const currentCenter = normaliseNaverCoord(this.map.getCenter());
+    const startCenter = new window.naver.maps.LatLng(currentCenter.lat, currentCenter.lng);
+    const zoom = this.map.getZoom();
     const target = new window.naver.maps.LatLng(coord.lat, coord.lng);
     const padding = this.getViewportPadding();
     const hasList = els.restaurantPanel.classList.contains("is-open");
     const hasDetail = !els.selectedCard.classList.contains("hidden");
     if (hasDetail && !hasList) {
       this.map.setOptions("padding", { top: 0, right: 0, bottom: 0, left: 0 });
-      this.map.updateBy(target, this.map.getZoom());
-      this.alignFocusedMarker(focusTarget, focusVersion);
+      this.map.updateBy(target, zoom);
+      this.alignFocusedMarker(focusTarget, focusVersion, startCenter, zoom);
       return;
     }
-    this.map.updateBy(target, this.map.getZoom());
+    this.map.updateBy(target, zoom);
     this.applyViewportPadding(padding);
-    this.alignFocusedMarker(focusTarget, focusVersion);
+    this.alignFocusedMarker(focusTarget, focusVersion, startCenter, zoom);
   }
 
-  alignFocusedMarker(focusTarget, focusVersion) {
-    if (!focusTarget) return;
+  alignFocusedMarker(focusTarget, focusVersion, startCenter, zoom) {
+    if (!focusTarget) {
+      this.animateFocusFrom(startCenter, zoom, focusVersion);
+      return;
+    }
     window.requestAnimationFrame(() => {
-      window.requestAnimationFrame(() => {
-        if (!this.map || focusVersion !== this.focusVersion) return;
-        const markerSelector = focusTarget === "user" ? ".user-location-marker" : ".pin-marker.is-selected";
-        const markerRect = document.querySelector(markerSelector)?.getBoundingClientRect();
-        if (!markerRect || markerRect.width <= 0 || markerRect.height <= 0) return;
+      if (!this.map || focusVersion !== this.focusVersion) return;
+      const markerSelector = focusTarget === "user" ? ".user-location-marker" : ".pin-marker.is-selected";
+      const markerRect = document.querySelector(markerSelector)?.getBoundingClientRect();
+      if (markerRect && markerRect.width > 0 && markerRect.height > 0) {
         const mapRect = this.mapHost.getBoundingClientRect();
         const cardTop = [...document.querySelectorAll(".restaurant-panel.is-open, .selected-card:not(.hidden)")]
           .map((card) => card.getBoundingClientRect())
@@ -3706,10 +3715,22 @@ class NaverMapAdapter {
         const desiredY = (mapRect.top + Math.min(mapRect.bottom, cardTop)) / 2;
         const actualY = markerRect.top + markerRect.height / 2;
         const offsetY = actualY - desiredY;
-        if (Math.abs(offsetY) < 0.5) return;
-        this.map.panBy(new window.naver.maps.Point(0, offsetY));
-      });
+        if (Math.abs(offsetY) >= 0.5) {
+          this.map.panBy(new window.naver.maps.Point(0, offsetY), { duration: 0 });
+        }
+      }
+      this.animateFocusFrom(startCenter, zoom, focusVersion);
     });
+  }
+
+  animateFocusFrom(startCenter, zoom, focusVersion) {
+    if (!this.map || focusVersion !== this.focusVersion) return;
+    const destination = normaliseNaverCoord(this.map.getCenter());
+    const finalCenter = new window.naver.maps.LatLng(destination.lat, destination.lng);
+    const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+    if (reduceMotion || typeof this.map.morph !== "function") return;
+    this.map.updateBy(startCenter, zoom);
+    this.map.morph(finalCenter, zoom, MAP_FOCUS_TRANSITION);
   }
 
   getViewportPadding() {
