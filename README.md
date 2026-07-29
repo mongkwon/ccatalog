@@ -1,6 +1,6 @@
 # 까탈로그 (ccatalog)
 
-> 수많은 리뷰 점수 대신, 운영자가 직접 고른 음식점을 추천 강도와 메뉴로 기록하는 맛집 지도
+> 까탈스러운 기준으로 고른 음식점과 추천 메뉴를 기록하는 맛집 로그
 
 [서비스 바로가기](https://mongkwon.github.io/ccatalog/)
 
@@ -8,17 +8,18 @@
 
 ## 프로젝트 소개
 
-까탈로그는 음식점의 평균 점수보다 **누가 어떤 강도로 추천하는지**에 집중한 지도 서비스입니다. 운영자가 검증한 음식점을 동메달, 은메달, 금메달로 분류하고 실제 추천 메뉴와 가격, 배달 가능 앱, 사진을 함께 제공합니다.
+까탈로그는 **‘까탈스럽다’와 기록을 뜻하는 ‘로그(log)’를 합친 이름**입니다. 수많은 리뷰의 평균 점수 대신, 운영자가 엄격한 취향으로 고른 음식점과 추천 메뉴를 지도 위에 기록합니다.
 
-회원은 음식점 현장에서 위치를 인증한 뒤 현재 메달에 동의해야 방문 기록을 남길 수 있습니다. 서로 다른 음식점 3곳에서 동의를 완료하면 `까탈리스트`가 되어 새로운 음식점 등록을 건의할 수 있습니다.
+등록된 음식점은 동메달부터 금메달까지 추천하는 정도에 따라 구분하며, 메뉴별 가격과 배달 가능 앱, 사진을 함께 제공합니다. 회원은 음식점 반경 500m 안에서 위치를 인증하고 현재 메달 평가에 동의하면 방문 기록을 남길 수 있습니다. 서로 다른 음식점 3곳에서 동의를 완료하면 `까탈리스트`가 되어 새로운 음식점 등록을 건의할 수 있습니다.
 
 ## 핵심 기능
 
-- 네이버 지도 기반 맛집 핀, 현재 위치 중심 진입, 등록 음식점이 보이도록 자동 줌 조정
+- 네이버 지도 기반 맛집 핀, 현재 위치 점 표시, 등록 음식점이 보이도록 자동 줌 조정
 - 동메달, 은메달, 금메달 추천 등급과 하단 필터 독
 - 추천 메뉴별 가격, 배달의민족·쿠팡이츠·요기요 지원 여부 표시
 - Supabase와 카카오 OAuth를 이용한 회원 인증
-- 위치 오차와 거리 조건을 검증하는 방문 확인
+- 음식점 반경 500m 진입 시 핀 강조 및 단계형 방문 인증
+- 위치 오차와 거리 조건을 데이터베이스에서 다시 검증하는 방문 확인
 - 방문 3곳 달성 시 영구 까탈리스트 승급 및 신규 음식점 건의
 - 관리자 전용 음식점 등록·수정·삭제, 사진 관리, 건의 검토
 - 첫 방문자에게 서비스 기준을 설명하는 3단계 튜토리얼
@@ -86,61 +87,3 @@ Figma 배포 도메인은 프록시가 Referer 헤더에 영향을 주어 네이
 - Backend as a Service: Supabase Auth, Postgres, Data API, Storage, Edge Functions
 - Authentication: Kakao OAuth through Supabase
 - Deployment: GitHub Actions, GitHub Pages
-
-## 프로젝트 구조
-
-```text
-.
-├── outputs/ccatalog/             # 배포되는 프론트엔드
-├── supabase/functions/           # 네이버 장소 검색 Edge Function
-├── supabase/migrations/          # 운영 DB 변경 이력
-├── supabase/schema.sql           # 초기 스키마 기준점
-├── docs/images/                  # README 이미지
-└── .github/workflows/deploy.yml  # GitHub Pages 배포
-```
-
-## 로컬 실행
-
-`outputs/ccatalog/config.json`을 생성합니다. 이 파일은 Git에 포함되지 않습니다.
-
-```json
-{
-  "naverMapKey": "네이버 Maps JavaScript API ncpKeyId",
-  "supabaseUrl": "https://PROJECT_REF.supabase.co",
-  "supabaseAnonKey": "Supabase anon public key"
-}
-```
-
-정적 서버를 실행합니다.
-
-```bash
-npx serve outputs/ccatalog
-```
-
-네이버 클라우드 콘솔의 Maps 애플리케이션에는 사용하는 로컬 주소와 운영 주소를 Web 서비스 URL로 등록해야 합니다. 지도 스크립트는 현재 방식인 `ncpKeyId` 파라미터를 사용합니다.
-
-## Supabase 구성
-
-1. Supabase 프로젝트에서 Data API와 RLS를 활성화합니다.
-2. `supabase/schema.sql`을 초기 스키마의 기준으로 사용합니다.
-3. `supabase/migrations`의 변경 이력을 순서대로 반영합니다.
-4. `naver-place-search`를 배포하고 `NAVER_SEARCH_CLIENT_ID`, `NAVER_SEARCH_CLIENT_SECRET`을 Edge Function secret으로 설정합니다.
-5. Kakao OAuth provider와 허용 Redirect URL을 설정합니다.
-
-브라우저에는 공개 가능한 `anon` 키만 전달합니다. RLS를 우회하는 `service_role` 또는 `sb_secret_...` 키는 프론트엔드와 GitHub Pages 설정에 넣지 않습니다.
-
-## 배포
-
-GitHub 저장소의 Actions secret에 아래 값을 등록합니다.
-
-```text
-NAVER_MAP_KEY
-SUPABASE_URL
-SUPABASE_ANON_KEY
-```
-
-`main` 브랜치에 push하면 워크플로가 배포용 `config.json`을 생성하고 `outputs/ccatalog`를 GitHub Pages에 배포합니다.
-
-## 현재 상태
-
-회원 인증, 방문 확인, 까탈리스트 승급, 음식점 건의, 관리자 검토, 음식점 사진 관리까지 구현되어 있습니다. 다음 개선 대상으로는 관리자 계정 관리 UI, 자동화된 회귀 테스트, 사용자 방문 이력 화면을 두고 있습니다.

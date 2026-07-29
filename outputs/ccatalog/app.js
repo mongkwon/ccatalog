@@ -53,15 +53,15 @@ const TUTORIAL_STEPS = [
     target: "restaurantPanel",
     placement: "top",
     visual: "purpose",
-    title: "취향을 믿고 고르는 지도",
-    description: "수많은 리뷰 점수 대신, 운영자가 직접 고른 음식점을 추천 메뉴와 함께 기록합니다.",
+    title: "까탈스러운 맛집 로그",
+    description: "엄격한 취향으로 고른 음식점과 추천 메뉴를 기록하는 지도입니다.",
   },
   {
     target: "bottomDock",
     placement: "top",
     visual: "ratings",
     title: "메달은 추천의 강도예요",
-    description: "동·은·금은 맛집 여부가 아니라 추천 강도를 나눕니다. 하단 필터로 원하는 메달만 볼 수 있습니다.",
+    description: "동메달부터 금메달까지, 추천하는 정도에 따라 구분했습니다. 하단 필터로 원하는 메달만 볼 수 있습니다.",
   },
   {
     target: "adminButton",
