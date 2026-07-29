@@ -1415,6 +1415,17 @@ function getInitialRestaurantRevealCoordinates(origin) {
   return [origin, ...revealRestaurants.map((restaurant) => restaurant.coord)];
 }
 
+function mirrorRevealCoordinatesAroundOrigin(origin, coords) {
+  return coords.flatMap((coord, index) => {
+    if (index === 0) return [coord];
+    const mirroredCoord = {
+      lat: origin.lat * 2 - coord.lat,
+      lng: origin.lng * 2 - coord.lng,
+    };
+    return isValidCoordinate(mirroredCoord) ? [coord, mirroredCoord] : [coord];
+  });
+}
+
 function distanceKmBetween(start, end) {
   const earthRadiusKm = 6371;
   const startLat = toRadians(start.lat);
@@ -1632,7 +1643,8 @@ async function centerMapOnUserLocation(adapter) {
   state.lastMapCoord = coord;
   const revealCoords = getInitialRestaurantRevealCoordinates(coord);
   if (revealCoords.length > 1 && typeof adapter.fitToCoordinates === "function") {
-    adapter.fitToCoordinates(revealCoords);
+    adapter.fitToCoordinates(mirrorRevealCoordinatesAroundOrigin(coord, revealCoords));
+    adapter.panTo(coord);
   } else {
     adapter.panTo(coord);
   }
