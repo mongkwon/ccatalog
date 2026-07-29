@@ -3679,55 +3679,58 @@ class NaverMapAdapter {
   focusCoordinate(coord, focusVersion, focusTarget) {
     if (!this.map || focusVersion !== this.focusVersion || !isValidCoordinate(coord)) return;
     this.map.stop();
+    const currentCenter = normaliseNaverCoord(this.map.getCenter());
+    const startCenter = new window.naver.maps.LatLng(currentCenter.lat, currentCenter.lng);
     const zoom = this.map.getZoom();
     const target = new window.naver.maps.LatLng(coord.lat, coord.lng);
+    const padding = this.getViewportPadding();
     const hasList = els.restaurantPanel.classList.contains("is-open");
     const hasDetail = !els.selectedCard.classList.contains("hidden");
     if (hasDetail && !hasList) {
       this.map.setOptions("padding", { top: 0, right: 0, bottom: 0, left: 0 });
-    } else {
-      this.applyViewportPadding();
-    }
-    const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
-    if (reduceMotion || typeof this.map.panTo !== "function") {
       this.map.updateBy(target, zoom);
-      this.alignFocusedMarker(focusTarget, focusVersion);
+      this.alignFocusedMarker(focusTarget, focusVersion, startCenter, zoom);
       return;
     }
-    if (this.isCoordinateVisible(target) || typeof this.map.morph !== "function") {
-      this.map.panTo(target, MAP_FOCUS_TRANSITION);
-    } else {
-      this.map.morph(target, zoom, MAP_FOCUS_TRANSITION);
+    this.map.updateBy(target, zoom);
+    this.applyViewportPadding(padding);
+    this.alignFocusedMarker(focusTarget, focusVersion, startCenter, zoom);
+  }
+
+  alignFocusedMarker(focusTarget, focusVersion, startCenter, zoom) {
+    if (!focusTarget) {
+      this.animateFocusFrom(startCenter, zoom, focusVersion);
+      return;
     }
-    window.setTimeout(() => this.alignFocusedMarker(focusTarget, focusVersion), MAP_FOCUS_TRANSITION.duration + 20);
-  }
-
-  isCoordinateVisible(coord) {
-    const projection = this.map.getProjection?.();
-    if (!projection?.fromCoordToOffset) return false;
-    const offset = projection.fromCoordToOffset(coord);
-    const mapRect = this.mapHost.getBoundingClientRect();
-    return offset.x >= 0 && offset.x <= mapRect.width && offset.y >= 0 && offset.y <= mapRect.height;
-  }
-
-  alignFocusedMarker(focusTarget, focusVersion) {
-    if (!focusTarget) return;
     window.requestAnimationFrame(() => {
       if (!this.map || focusVersion !== this.focusVersion) return;
       const markerSelector = focusTarget === "user" ? ".user-location-marker" : ".pin-marker.is-selected";
       const markerRect = document.querySelector(markerSelector)?.getBoundingClientRect();
-      if (!markerRect || markerRect.width <= 0 || markerRect.height <= 0) return;
-      const mapRect = this.mapHost.getBoundingClientRect();
-      const cardTop = [...document.querySelectorAll(".restaurant-panel.is-open, .selected-card:not(.hidden)")]
-        .map((card) => card.getBoundingClientRect())
-        .filter((rect) => rect.width > 0 && rect.height > 0)
-        .reduce((top, rect) => Math.min(top, rect.top), mapRect.bottom);
-      const desiredY = (mapRect.top + Math.min(mapRect.bottom, cardTop)) / 2;
-      const actualY = markerRect.top + markerRect.height / 2;
-      const offsetY = actualY - desiredY;
-      if (Math.abs(offsetY) < 0.5) return;
-      this.map.panBy(new window.naver.maps.Point(0, offsetY));
+      if (markerRect && markerRect.width > 0 && markerRect.height > 0) {
+        const mapRect = this.mapHost.getBoundingClientRect();
+        const cardTop = [...document.querySelectorAll(".restaurant-panel.is-open, .selected-card:not(.hidden)")]
+          .map((card) => card.getBoundingClientRect())
+          .filter((rect) => rect.width > 0 && rect.height > 0)
+          .reduce((top, rect) => Math.min(top, rect.top), mapRect.bottom);
+        const desiredY = (mapRect.top + Math.min(mapRect.bottom, cardTop)) / 2;
+        const actualY = markerRect.top + markerRect.height / 2;
+        const offsetY = actualY - desiredY;
+        if (Math.abs(offsetY) >= 0.5) {
+          this.map.panBy(new window.naver.maps.Point(0, offsetY), { duration: 0 });
+        }
+      }
+      this.animateFocusFrom(startCenter, zoom, focusVersion);
     });
+  }
+
+  animateFocusFrom(startCenter, zoom, focusVersion) {
+    if (!this.map || focusVersion !== this.focusVersion) return;
+    const destination = normaliseNaverCoord(this.map.getCenter());
+    const finalCenter = new window.naver.maps.LatLng(destination.lat, destination.lng);
+    const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+    if (reduceMotion || typeof this.map.morph !== "function") return;
+    this.map.updateBy(startCenter, zoom);
+    this.map.morph(finalCenter, zoom, MAP_FOCUS_TRANSITION);
   }
 
   getViewportPadding() {
