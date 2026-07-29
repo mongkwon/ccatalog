@@ -2398,10 +2398,10 @@ function selectRestaurant(id, { closePanel = false } = {}) {
   }
   state.selectedId = id;
   const restaurant = state.restaurants.find((item) => item.id === id);
+  render();
   if (restaurant) {
     state.map?.panTo({ lat: restaurant.lat, lng: restaurant.lng });
   }
-  render();
 }
 
 function openSpotDialog(restaurant = null, { mode = "restaurant" } = {}) {
@@ -3522,6 +3522,7 @@ class NaverMapAdapter {
     this.map = null;
     this.markers = [];
     this.userMarker = null;
+    this.focusFrame = null;
     this.clickHandler = null;
     this.clickListener = null;
   }
@@ -3618,7 +3619,23 @@ class NaverMapAdapter {
   }
 
   panTo(coord) {
-    this.map.panTo(new window.naver.maps.LatLng(coord.lat, coord.lng));
+    const target = new window.naver.maps.LatLng(coord.lat, coord.lng);
+    const mapRect = this.mapHost.getBoundingClientRect();
+    const visiblePanel = document.querySelector(".selected-card:not(.hidden), .restaurant-panel.is-open");
+    const panelTop = visiblePanel?.getBoundingClientRect().top;
+    const visibleBottom = Number.isFinite(panelTop) ? Math.min(mapRect.bottom, panelTop) : mapRect.bottom;
+    const focusY = Math.max(0, visibleBottom - mapRect.top) / 2;
+    const centerY = mapRect.height / 2;
+    if (this.focusFrame !== null) window.cancelAnimationFrame(this.focusFrame);
+    this.map.setCenter(target);
+    this.focusFrame = window.requestAnimationFrame(() => {
+      const projection = this.map?.getProjection();
+      const adjustedCenter = projection?.fromOffsetToCoord?.(
+        new window.naver.maps.Point(mapRect.width / 2, centerY + (centerY - focusY))
+      );
+      if (adjustedCenter) this.map.setCenter(adjustedCenter);
+      this.focusFrame = null;
+    });
   }
 
   fitToCoordinates(coords) {
@@ -3627,7 +3644,7 @@ class NaverMapAdapter {
       .map((coord) => new window.naver.maps.LatLng(coord.lat, coord.lng));
     if (points.length < 2) {
       if (points[0]) {
-        this.map.panTo(points[0]);
+        this.panTo(normaliseNaverCoord(points[0]));
       }
       return;
     }
@@ -3636,6 +3653,8 @@ class NaverMapAdapter {
   }
 
   destroy() {
+    if (this.focusFrame !== null) window.cancelAnimationFrame(this.focusFrame);
+    this.focusFrame = null;
     this.markers.forEach((marker) => marker.setMap(null));
     this.markers = [];
     this.userMarker?.setMap(null);
