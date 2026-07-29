@@ -2398,8 +2398,9 @@ function selectRestaurant(id, { closePanel = false } = {}) {
   }
   state.selectedId = id;
   const restaurant = state.restaurants.find((item) => item.id === id);
-  if (restaurant) {
-    state.map?.panTo({ lat: restaurant.lat, lng: restaurant.lng });
+  renderSelectedCard(getVisibleRestaurants());
+  if (restaurant && state.map) {
+    state.map.panTo({ lat: restaurant.lat, lng: restaurant.lng }, { accountForCards: true });
   }
   render();
 }
@@ -3617,8 +3618,48 @@ class NaverMapAdapter {
     return normaliseNaverCoord(this.map.getCenter());
   }
 
-  panTo(coord) {
-    this.map.panTo(new window.naver.maps.LatLng(coord.lat, coord.lng));
+  panTo(coord, { accountForCards = false } = {}) {
+    const target = new window.naver.maps.LatLng(coord.lat, coord.lng);
+    const adjustedCenter = accountForCards ? this.getCardAwareCenter(target) : null;
+    this.map.panTo(adjustedCenter || target);
+  }
+
+  getCardAwareCenter(target) {
+    const mapRect = this.mapHost.getBoundingClientRect();
+    const cardTop = [...document.querySelectorAll(".restaurant-panel.is-open, .selected-card:not(.hidden)")]
+      .map((card) => card.getBoundingClientRect())
+      .filter((rect) => rect.width > 0 && rect.height > 0)
+      .reduce((top, rect) => Math.min(top, rect.top), mapRect.bottom);
+    const desiredX = mapRect.width / 2;
+    const desiredY = (Math.max(mapRect.top, Math.min(mapRect.bottom, cardTop)) - mapRect.top) / 2;
+    const renderedCenter = this.getRenderedCenterPoint(mapRect);
+    if (!renderedCenter) return null;
+    const projection = this.map.getProjection();
+    const targetOffset = projection.fromCoordToOffset(target);
+    const adjusted = projection.fromOffsetToCoord(
+      new window.naver.maps.Point(
+        targetOffset.x + renderedCenter.x - desiredX,
+        targetOffset.y + renderedCenter.y - desiredY
+      )
+    );
+    return adjusted;
+  }
+
+  getRenderedCenterPoint(mapRect) {
+    const probe = new window.naver.maps.Marker({
+      position: this.map.getCenter(),
+      map: this.map,
+      clickable: false,
+      icon: {
+        content: '<i class="map-center-probe" aria-hidden="true"></i>',
+        anchor: new window.naver.maps.Point(0, 0),
+      },
+    });
+    const probeRect = this.mapHost.querySelector(".map-center-probe")?.getBoundingClientRect();
+    probe.setMap(null);
+    return probeRect
+      ? { x: probeRect.left - mapRect.left, y: probeRect.top - mapRect.top }
+      : null;
   }
 
   fitToCoordinates(coords) {
