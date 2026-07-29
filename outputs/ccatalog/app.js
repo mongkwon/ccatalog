@@ -1632,9 +1632,9 @@ async function centerMapOnUserLocation(adapter) {
   state.lastMapCoord = coord;
   const revealCoords = getInitialRestaurantRevealCoordinates(coord);
   if (revealCoords.length > 1 && typeof adapter.fitToCoordinates === "function") {
-    adapter.fitToCoordinates(revealCoords);
+    adapter.fitToCoordinates(revealCoords, { focusCoord: coord, accountForCards: true });
   } else {
-    adapter.panTo(coord);
+    adapter.panTo(coord, { accountForCards: true });
   }
   render();
 }
@@ -3662,18 +3662,52 @@ class NaverMapAdapter {
       : null;
   }
 
-  fitToCoordinates(coords) {
+  fitToCoordinates(coords, { focusCoord = null, accountForCards = false } = {}) {
     const points = coords
       .filter(isValidCoordinate)
       .map((coord) => new window.naver.maps.LatLng(coord.lat, coord.lng));
     if (points.length < 2) {
       if (points[0]) {
-        this.map.panTo(points[0]);
+        this.panTo(normaliseNaverCoord(points[0]), { accountForCards });
       }
       return;
     }
 
-    this.map.fitBounds(points, INITIAL_REVEAL_BOUNDS_OPTIONS);
+    const fitPoints = focusCoord && isValidCoordinate(focusCoord)
+      ? this.getCoordinatesSymmetricAround(points, new window.naver.maps.LatLng(focusCoord.lat, focusCoord.lng))
+      : points;
+    const fitOptions = accountForCards
+      ? { ...INITIAL_REVEAL_BOUNDS_OPTIONS, ...this.getCardFitBoundsOptions() }
+      : INITIAL_REVEAL_BOUNDS_OPTIONS;
+    this.map.fitBounds(fitPoints, fitOptions);
+  }
+
+  getCoordinatesSymmetricAround(points, focus) {
+    const projection = this.map.getProjection();
+    const focusPoint = projection.fromCoordToPoint(focus);
+    return points.flatMap((point) => {
+      const worldPoint = projection.fromCoordToPoint(point);
+      const mirroredPoint = new window.naver.maps.Point(
+        focusPoint.x * 2 - worldPoint.x,
+        focusPoint.y * 2 - worldPoint.y
+      );
+      return [point, projection.fromPointToCoord(mirroredPoint)];
+    });
+  }
+
+  getCardFitBoundsOptions() {
+    const mapRect = this.mapHost.getBoundingClientRect();
+    const cardTop = [...document.querySelectorAll(".restaurant-panel.is-open, .selected-card:not(.hidden)")]
+      .map((card) => card.getBoundingClientRect())
+      .filter((rect) => rect.width > 0 && rect.height > 0)
+      .reduce((top, rect) => Math.min(top, rect.top), mapRect.bottom);
+    return {
+      top: 0,
+      right: INITIAL_REVEAL_BOUNDS_OPTIONS.right,
+      bottom: Math.max(0, Math.min(mapRect.height, mapRect.bottom - cardTop)),
+      left: INITIAL_REVEAL_BOUNDS_OPTIONS.left,
+      maxZoom: INITIAL_REVEAL_BOUNDS_OPTIONS.maxZoom,
+    };
   }
 
   destroy() {
