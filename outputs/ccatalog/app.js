@@ -1634,7 +1634,9 @@ async function centerMapOnUserLocation(adapter) {
   if (revealCoords.length > 1 && typeof adapter.fitToCoordinates === "function") {
     adapter.fitToCoordinates(revealCoords);
   } else {
+    render();
     adapter.panTo(coord);
+    return;
   }
   render();
 }
@@ -2389,6 +2391,7 @@ function visitErrorMessage(error) {
 function selectRestaurant(id, { closePanel = false } = {}) {
   if (isPhotoDialogOpen()) closePhotoDialog();
   if (isProposalReviewDialogOpen()) closeProposalReviewDialog();
+  const shouldRefocus = state.selectedId !== id || (closePanel && els.restaurantPanel.classList.contains("is-open"));
   if (closePanel) {
     closeFloatingPanels();
   }
@@ -2398,10 +2401,10 @@ function selectRestaurant(id, { closePanel = false } = {}) {
   }
   state.selectedId = id;
   const restaurant = state.restaurants.find((item) => item.id === id);
-  if (restaurant) {
+  render();
+  if (restaurant && shouldRefocus) {
     state.map?.panTo({ lat: restaurant.lat, lng: restaurant.lng });
   }
-  render();
 }
 
 function openSpotDialog(restaurant = null, { mode = "restaurant" } = {}) {
@@ -3522,6 +3525,7 @@ class NaverMapAdapter {
     this.map = null;
     this.markers = [];
     this.userMarker = null;
+    this.focusTimer = null;
     this.clickHandler = null;
     this.clickListener = null;
   }
@@ -3618,7 +3622,41 @@ class NaverMapAdapter {
   }
 
   panTo(coord) {
-    this.map.panTo(new window.naver.maps.LatLng(coord.lat, coord.lng));
+    const target = new window.naver.maps.LatLng(coord.lat, coord.lng);
+    this.cancelFocusAlignment();
+    let aligned = false;
+    const alignToCards = () => {
+      if (!this.map || aligned) return;
+      aligned = true;
+      this.cancelFocusAlignment();
+      const mapRect = this.mapHost.getBoundingClientRect();
+      const cardTops = [...document.querySelectorAll(".restaurant-panel.is-open, .selected-card:not(.hidden)")]
+        .map((card) => card.getBoundingClientRect())
+        .filter((rect) => rect.width > 0 && rect.height > 0)
+        .map((rect) => rect.top);
+      const visibleBottom = cardTops.length ? Math.min(mapRect.bottom, ...cardTops) : mapRect.bottom;
+      const focusY = Math.max(0, visibleBottom - mapRect.top) / 2;
+      const mapSize = this.map.getSize();
+      const offsetY = mapSize.height / 2 - focusY;
+      if (cardTops.length > 1) {
+        this.map.panBy(new window.naver.maps.Point(0, offsetY));
+        return;
+      }
+      const adjustedCenter = this.map.getProjection().fromOffsetToCoord(
+        new window.naver.maps.Point(mapSize.width / 2, mapSize.height / 2 + offsetY)
+      );
+      this.map.setCenter(adjustedCenter);
+    };
+
+    this.map.setCenter(target);
+    this.focusTimer = window.setTimeout(alignToCards, 220);
+  }
+
+  cancelFocusAlignment() {
+    if (this.focusTimer !== null) {
+      window.clearTimeout(this.focusTimer);
+      this.focusTimer = null;
+    }
   }
 
   fitToCoordinates(coords) {
@@ -3636,6 +3674,7 @@ class NaverMapAdapter {
   }
 
   destroy() {
+    this.cancelFocusAlignment();
     this.markers.forEach((marker) => marker.setMap(null));
     this.markers = [];
     this.userMarker?.setMap(null);
