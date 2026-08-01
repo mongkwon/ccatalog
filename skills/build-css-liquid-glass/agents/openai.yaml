@@ -1,0 +1,4 @@
+interface:
+  display_name: "CSS Liquid Glass"
+  short_description: "브라우저 호환형 CSS 리퀴드글래스를 구현합니다"
+  default_prompt: "Use $build-css-liquid-glass to implement a responsive, touch-safe CSS liquid glass control."
