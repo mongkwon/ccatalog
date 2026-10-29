@@ -10,6 +10,14 @@
 
 이 문서는 대화에서 정한 개발 방향을 인계한다. 아래의 개편 정책은 아직 구현되지 않았다.
 
+### 2026-10-29 진행 상태
+
+React 이주를 이 세션에서 구현했다. 새 개발 환경에서는 `npm ci` 후 `npm run dev`로 실행한다.
+소스는 `outputs/ccatalog/src/`, 정적 파일은 `outputs/ccatalog/public/`, 빌드 결과는 `dist/`다.
+로컬 설정의 현재 경로는 `outputs/ccatalog/public/config.json`이다. 기존 설정 파일은 이 경로로 복사해 사용한다.
+기존 서비스 기능은 유지하며 그룹, 댓글, 투표와 방문 인증 제거는 후속 단계에 남아 있다.
+이하의 기존 구조 설명은 이주 전 기준 기록이며, 현재 구조와 검증 내용은 `docs/REACT_MIGRATION.md`를 참고한다.
+
 ## 저장소와 현재 기준
 
 - GitHub: https://github.com/mongkwon/ccatalog

@@ -28,6 +28,18 @@ jobs:
       - name: Configure Pages
         uses: actions/configure-pages@v5
 
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run domain tests
+        run: npm test
+
       - name: Create runtime config
         shell: bash
         run: |
@@ -38,17 +50,20 @@ jobs:
             supabaseUrl: process.env.SUPABASE_URL || "",
             supabaseAnonKey: process.env.SUPABASE_ANON_KEY || "",
           };
-          fs.writeFileSync("outputs/ccatalog/config.json", `${JSON.stringify(config, null, 2)}\n`);
+          fs.writeFileSync("outputs/ccatalog/public/config.json", `${JSON.stringify(config, null, 2)}\n`);
           NODE
         env:
           NAVER_MAP_KEY: ${{ secrets.NAVER_MAP_KEY }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
 
+      - name: Build React app
+        run: npm run build
+
       - name: Upload static app
         uses: actions/upload-pages-artifact@v3
         with:
-          path: outputs/ccatalog
+          path: dist
 
       - name: Deploy to GitHub Pages
         id: deployment

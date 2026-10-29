@@ -1,1 +1,7 @@
 outputs/ccatalog/config.json
+outputs/ccatalog/public/config.json
+node_modules/
+dist/
+test-results/
+playwright-report/
+.env*

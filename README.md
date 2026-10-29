@@ -40,7 +40,7 @@
 
 ```mermaid
 flowchart LR
-    U[Browser\nHTML · CSS · JavaScript]
+    U[Browser\nReact · CSS · JavaScript]
     M[Naver Maps\nJavaScript API]
     A[Supabase Auth\nKakao OAuth]
     D[(Postgres\nData API + RLS)]
@@ -58,12 +58,13 @@ flowchart LR
     G --> P --> U
 ```
 
-브라우저 애플리케이션은 GitHub Pages에서 정적으로 호스팅됩니다. 인증, 데이터베이스, 파일 저장소는 Supabase가 담당하고, 비밀 키가 필요한 네이버 장소 검색만 Edge Function을 통과합니다.
+브라우저 애플리케이션은 React로 구성하고 Vite로 빌드해 GitHub Pages에서 호스팅됩니다. 인증, 데이터베이스, 파일 저장소는 Supabase가 담당하고, 비밀 키가 필요한 네이버 장소 검색만 Edge Function을 통과합니다.
 
 ## 기술 스택
 
-- Frontend: HTML5, CSS3, Vanilla JavaScript
+- Frontend: React, JavaScript, CSS3, Vite
 - Map: Naver Maps JavaScript API
 - Backend as a Service: Supabase Auth, Postgres, Data API, Storage, Edge Functions
 - Authentication: Kakao OAuth through Supabase
 - Deployment: GitHub Actions, GitHub Pages
+- Test: Node.js Test Runner, Playwright (Chromium, Mobile WebKit)
