@@ -68,8 +68,12 @@ export default function App() {
     (result) => {
       applyVoteResult(result);
       if (result.outcome === "deleted") {
-        setSelectedId(null);
-        setDialog({ type: null, open: false, restaurant: null });
+        setSelectedId((id) => (id === result.restaurant_id ? null : id));
+        setDialog((current) =>
+          current.restaurant?.id === result.restaurant_id
+            ? { type: null, open: false, restaurant: null }
+            : current,
+        );
         setListOpen(true);
         setNotice("이 그룹에서 삭제된 맛집입니다");
       }

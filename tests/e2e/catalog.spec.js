@@ -190,6 +190,8 @@ async function setup(
         });
       const votes = (state.votes[record.id] ??= {});
       if (path.endsWith("cast_restaurant_vote")) {
+        if (state.voteDelay)
+          await new Promise((resolve) => setTimeout(resolve, state.voteDelay));
         if (payload.p_round !== (record.vote_round || 1))
           return route.fulfill({
             status: 400,
@@ -715,4 +717,20 @@ test("stale vote rounds reload without applying a second medal change", async ({
   );
   await expect(page.locator(".vote-summary small")).toHaveText("2번째 투표");
   expect(record.rating).toBe(2);
+});
+
+test("closing a pending vote still updates the map record when it completes", async ({
+  page,
+}) => {
+  const { state } = await setup(page);
+  const record = state.restaurants[1];
+  state.votes[record.id] = { anotherMember: "up" };
+  state.voteDelay = 500;
+  await page.locator(".restaurant-item").last().click();
+  await page.getByRole("button", { name: "의견 · 메달 투표" }).click();
+  await page.locator(".vote-options button").first().click();
+  await page.getByRole("button", { name: "의견 닫기" }).click();
+  await expect(
+    page.locator("#selectedCard .card-side .rating-badge"),
+  ).toContainText("은메달");
 });

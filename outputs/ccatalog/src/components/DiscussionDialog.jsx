@@ -72,6 +72,7 @@ export default function DiscussionDialog({
   }
   useEffect(() => {
     ++readRevision.current;
+    if (!open || !restaurant) return;
     setSnapshot(null);
     setComments([]);
     setBody("");
@@ -80,7 +81,6 @@ export default function DiscussionDialog({
     setMessage("");
     setBusy(false);
     expanded.current = false;
-    if (!open || !restaurant) return;
     load();
     const timer = setInterval(() => {
       if (document.visibilityState === "visible" && !lock.current)
@@ -127,14 +127,15 @@ export default function DiscussionDialog({
     )
       return;
     await act(async (active) => {
+      const actor = storeRef.current.userId;
       const result = await storeRef.current.vote(
         restaurant.id,
         snapshot.round,
         choice,
       );
-      if (!active()) return;
+      if (storeRef.current.userId !== actor) return;
       onOutcome(result);
-      if (result.outcome === "deleted") return;
+      if (!active() || result.outcome === "deleted") return;
       await load();
       setMessage(
         result.outcome === "pending"
