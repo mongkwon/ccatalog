@@ -266,6 +266,159 @@ button {
   display: grid;
   gap: 8px;
 }
+
+.discussion-open {
+  margin-top: 10px;
+}
+.modal-card.discussion-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: min(620px, calc(100dvh - var(--floating-bottom) - 96px));
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.discussion-card > :not(.discussion-comments) {
+  flex-shrink: 0;
+}
+.discussion-card > p:empty {
+  display: none;
+}
+.discussion-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+.discussion-header > div {
+  min-width: 0;
+}
+.discussion-header h2 {
+  overflow-wrap: anywhere;
+}
+.discussion-header p,
+.discussion-muted,
+.vote-threshold {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.medal-voting {
+  border-bottom: 1px solid var(--edge-soft);
+  padding-bottom: 14px;
+}
+.vote-summary,
+.discussion-comments-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.vote-summary small {
+  color: var(--muted);
+  font-size: 11px;
+}
+.vote-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+.vote-options button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 40px;
+  border: 1px solid var(--edge-soft);
+  border-radius: 999px;
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.24);
+  font-size: 12px;
+}
+.vote-options button[aria-pressed="true"] {
+  background: rgba(75, 84, 92, 0.16);
+  border-color: rgba(75, 84, 92, 0.3);
+}
+.vote-options button:disabled {
+  opacity: 0.45;
+}
+.discussion-comments {
+  min-height: 40px;
+  flex: 0 0 auto;
+}
+.discussion-comment {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--edge-soft);
+}
+.discussion-comment header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+}
+.discussion-comment header strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.discussion-comment time {
+  flex-shrink: 0;
+  color: var(--muted);
+  font-size: 10px;
+}
+.discussion-comment p {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+  line-height: 1.6;
+  margin: 6px 0;
+}
+.comment-actions,
+.comment-submit {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+.comment-actions button {
+  border: 0;
+  padding: 4px 0;
+  background: transparent;
+  color: var(--soft-ink);
+  font-size: 11px;
+}
+.comment-form {
+  display: grid;
+  gap: 8px;
+}
+.comment-form textarea {
+  width: 100%;
+  resize: none;
+  min-height: 62px;
+  padding: 10px;
+  border: 1px solid var(--edge-soft);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.2);
+  font: inherit;
+  font-size: 13px;
+  color: var(--ink);
+}
+.catalog-notice {
+  position: fixed;
+  z-index: 40;
+  top: 90px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: calc(100vw - 36px);
+  width: max-content;
+  padding: 10px 14px;
+  border: 1px solid var(--edge-soft);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.94);
+  font-size: 13px;
+  color: var(--ink);
+}
 .restaurant-item h3 {
   display: flex;
   align-items: center;

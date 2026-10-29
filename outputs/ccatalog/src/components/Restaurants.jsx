@@ -90,6 +90,7 @@ export function RestaurantDetail({
   onPhotos,
   onDelete,
   onViewPhoto,
+  onDiscussion,
 }) {
   const alternatives = restaurant
     ? catalog.restaurants.filter((item) => samePlace(item, restaurant))
@@ -154,6 +155,13 @@ export function RestaurantDetail({
                 </div>
               )}
               {restaurant.memo && <p className="memo">{restaurant.memo}</p>}
+              <button
+                type="button"
+                className="secondary-button discussion-open"
+                onClick={() => onDiscussion(restaurant)}
+              >
+                의견 · 메달 투표
+              </button>
               {alternatives.length > 1 && (
                 <div className="group-records" aria-label="그룹별 메달">
                   {alternatives.map((item) => (

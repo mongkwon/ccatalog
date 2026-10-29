@@ -273,6 +273,7 @@ function normalizeRestaurant(item) {
     id: String(item.id || createId()),
     groupId: String(item.groupId || ""),
     createdBy: String(item.createdBy || ""),
+    voteRound: Number(item.voteRound) || 1,
     name: String(item.name || "이름 없음"),
     category: String(item.category || "기타"),
     rating,

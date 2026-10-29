@@ -2,3 +2,7 @@ project_id = "ccatalog"
 
 [functions.naver-place-search]
 verify_jwt = true
+
+[functions.catalog-photo-cleanup]
+# Authenticated by the per-job capability; the handler rejects all other requests.
+verify_jwt = false

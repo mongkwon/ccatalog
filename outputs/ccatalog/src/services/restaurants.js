@@ -8,7 +8,7 @@ import {
 } from "../lib/domain.js";
 
 const columns =
-  "id,group_id,created_by,name,category,rating,area,lat,lng,menus,menu_items,delivery_apps,memo,created_at,updated_at";
+  "id,group_id,created_by,name,category,rating,vote_round,area,lat,lng,menus,menu_items,delivery_apps,memo,created_at,updated_at";
 const photoColumns =
   "id,restaurant_id,storage_path,alt_text,sort_order,created_at";
 
@@ -186,17 +186,6 @@ export class SupabaseRestaurantStore {
     return fromRow(data);
   }
   async remove(id) {
-    const { data, error } = await this.client
-      .from("restaurant_photos")
-      .select("storage_path")
-      .eq("restaurant_id", id);
-    if (error) throw error;
-    if (data.length) {
-      const result = await this.client.storage
-        .from(RESTAURANT_PHOTO_BUCKET)
-        .remove(data.map((photo) => photo.storage_path));
-      if (result.error) throw result.error;
-    }
     const result = await this.client
       .from("restaurants")
       .delete()
@@ -204,6 +193,42 @@ export class SupabaseRestaurantStore {
       .select("id")
       .single();
     if (result.error) throw result.error;
+  }
+  async discussion(id, cursor = null, signal) {
+    const query = this.client.rpc("restaurant_discussion", {
+      p_restaurant_id: id,
+      p_before: cursor?.created_at ?? null,
+      p_before_id: cursor?.id ?? null,
+    });
+    const { data, error } = await (signal ? query.abortSignal(signal) : query);
+    if (error) throw error;
+    return data;
+  }
+  async vote(id, round, choice) {
+    const { data, error } = await this.client.rpc("cast_restaurant_vote", {
+      p_restaurant_id: id,
+      p_round: round,
+      p_choice: choice,
+    });
+    if (error) throw error;
+    return data;
+  }
+  async saveComment(id, body, commentId = null) {
+    const table = this.client.from("restaurant_comments");
+    const query = commentId
+      ? table.update({ body }).eq("id", commentId).eq("restaurant_id", id)
+      : table.insert({ restaurant_id: id, user_id: this.userId, body });
+    const { error } = await query.select("id").single();
+    if (error) throw error;
+  }
+  async deleteComment(id) {
+    const { error } = await this.client
+      .from("restaurant_comments")
+      .delete()
+      .eq("id", id)
+      .select("id")
+      .single();
+    if (error) throw error;
   }
   async addRestaurantPhoto(restaurant, blob, sortOrder) {
     if (!this.userId) throw new Error("not_authenticated");
@@ -264,6 +289,7 @@ function fromRow(row, photos = []) {
     ...row,
     groupId: row.group_id,
     createdBy: row.created_by,
+    voteRound: row.vote_round,
     menuItems: row.menu_items,
     deliveryApps: row.delivery_apps,
     photos,

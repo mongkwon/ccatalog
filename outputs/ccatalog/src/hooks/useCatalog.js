@@ -18,6 +18,7 @@ export function useCatalog() {
   const [inviteMessage, setInviteMessage] = useState("");
   const storeRef = useRef(null);
   const revision = useRef(0);
+  const dataRevision = useRef(0);
 
   const syncAuth = useCallback(async (store = storeRef.current) => {
     if (!store) return;
@@ -114,8 +115,10 @@ export function useCatalog() {
 
   const refreshRestaurants = useCallback(async () => {
     const request = revision.current;
+    const dataRequest = dataRevision.current;
     const records = await storeRef.current.list();
-    if (request === revision.current) setRestaurants(records);
+    if (request === revision.current && dataRequest === dataRevision.current)
+      setRestaurants(records);
     return records;
   }, []);
   useEffect(() => {
@@ -127,20 +130,49 @@ export function useCatalog() {
     );
     return () => clearInterval(timer);
   }, [auth.user?.id, refreshRestaurants]);
-  const updateRestaurant = useCallback(
-    (restaurant) =>
-      setRestaurants((records) => {
-        if (storeRef.current?.userId !== restaurant.createdBy) return records;
-        const exists = records.some((item) => item.id === restaurant.id);
-        return exists
-          ? records.map((item) =>
-              item.id === restaurant.id ? restaurant : item,
-            )
-          : [restaurant, ...records];
-      }),
-    [],
-  );
+  const updateRestaurant = useCallback((restaurant, { isNew = false } = {}) => {
+    ++dataRevision.current;
+    setRestaurants((records) => {
+      if (storeRef.current?.userId !== restaurant.createdBy) return records;
+      const exists = records.some((item) => item.id === restaurant.id);
+      return exists
+        ? records.map((item) =>
+            item.id === restaurant.id
+              ? {
+                  ...restaurant,
+                  rating:
+                    item.voteRound > restaurant.voteRound
+                      ? item.rating
+                      : restaurant.rating,
+                  voteRound: Math.max(item.voteRound, restaurant.voteRound),
+                }
+              : item,
+          )
+        : isNew
+          ? [restaurant, ...records]
+          : records;
+    });
+  }, []);
   const isMember = Boolean(auth.user && !auth.user.is_anonymous);
+  const applyVoteResult = useCallback((result) => {
+    ++dataRevision.current;
+    setRestaurants((records) => {
+      if (result.outcome === "deleted")
+        return records.filter((record) => record.id !== result.restaurant_id);
+      let changed = false;
+      const next = records.map((record) => {
+        if (
+          record.id !== result.restaurant_id ||
+          result.round < record.voteRound ||
+          (result.rating === record.rating && result.round === record.voteRound)
+        )
+          return record;
+        changed = true;
+        return { ...record, rating: result.rating, voteRound: result.round };
+      });
+      return changed ? next : records;
+    });
+  }, []);
   const ownsRestaurant = (restaurant) =>
     isMember && restaurant?.createdBy === auth.user.id;
   return {
@@ -154,6 +186,7 @@ export function useCatalog() {
     syncAuth,
     refreshRestaurants,
     updateRestaurant,
+    applyVoteResult,
     isMember,
     ownsRestaurant,
     hiddenGroups,

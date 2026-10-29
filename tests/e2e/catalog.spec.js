@@ -119,6 +119,8 @@ async function setup(
       },
     ],
     photos: [],
+    comments: [],
+    votes: {},
     searches: [],
     writes: [],
     signed: 0,
@@ -174,7 +176,105 @@ async function setup(
       body = secondGroupId;
     } else if (path.endsWith("/rpc/create_catalog_invite")) body = invitation;
     else if (path.endsWith("/rpc/join_catalog_group")) body = groupId;
-    else if (path.includes("/functions/v1/naver-place-search")) {
+    else if (
+      path.endsWith("/rpc/restaurant_discussion") ||
+      path.endsWith("/rpc/cast_restaurant_vote")
+    ) {
+      const record = state.restaurants.find(
+        (item) => item.id === payload.p_restaurant_id,
+      );
+      if (!record)
+        return route.fulfill({
+          status: 400,
+          json: { message: "restaurant_unavailable", code: "P0001" },
+        });
+      const votes = (state.votes[record.id] ??= {});
+      if (path.endsWith("cast_restaurant_vote")) {
+        if (payload.p_round !== (record.vote_round || 1))
+          return route.fulfill({
+            status: 400,
+            json: { message: "vote_round_changed", code: "P0001" },
+          });
+        votes[userId] = payload.p_choice;
+        let outcome = "pending";
+        for (const choice of ["up", "down"])
+          if (
+            Object.values(votes).filter((value) => value === choice).length >= 2
+          )
+            outcome = choice;
+        if (outcome === "down" && record.rating === 1) {
+          state.restaurants = state.restaurants.filter(
+            (item) => item.id !== record.id,
+          );
+          state.comments = state.comments.filter(
+            (item) => item.restaurant_id !== record.id,
+          );
+          delete state.votes[record.id];
+          body = { outcome: "deleted", restaurant_id: record.id };
+        } else {
+          if (outcome !== "pending") {
+            record.rating += outcome === "up" ? 1 : -1;
+            record.vote_round = (record.vote_round || 1) + 1;
+            state.votes[record.id] = {};
+          }
+          body = {
+            outcome,
+            rating: record.rating,
+            round: record.vote_round || 1,
+            restaurant_id: record.id,
+          };
+        }
+      } else {
+        const comments = state.comments
+          .filter((item) => item.restaurant_id === record.id)
+          .sort(
+            (a, b) =>
+              b.created_at.localeCompare(a.created_at) ||
+              b.id.localeCompare(a.id),
+          );
+        const page = payload.p_before
+          ? comments.filter(
+              (item) =>
+                item.created_at < payload.p_before ||
+                (item.created_at === payload.p_before &&
+                  item.id < payload.p_before_id),
+            )
+          : comments;
+        body = {
+          rating: record.rating,
+          round: record.vote_round || 1,
+          eligible: 3,
+          required: 2,
+          can_vote: record.created_by !== userId,
+          mine: votes[userId] || null,
+          votes: Object.fromEntries(
+            ["up", "keep", "down"].map((choice) => [
+              choice,
+              Object.values(votes).filter((value) => value === choice).length,
+            ]),
+          ),
+          comment_count: comments.length,
+          comments: page.slice(0, 21),
+        };
+      }
+    } else if (path.endsWith("/restaurant_comments")) {
+      const id = url.searchParams.get("id")?.slice(3);
+      if (method === "POST") {
+        body = {
+          ...payload,
+          id: `comment-${state.comments.length}`,
+          nickname: "테스트회원",
+          created_at: new Date().toISOString(),
+        };
+        state.comments.push(body);
+      } else if (method === "PATCH") {
+        body = state.comments.find((item) => item.id === id);
+        Object.assign(body, payload);
+      } else if (method === "DELETE") {
+        state.comments = state.comments.filter((item) => item.id !== id);
+        body = { id };
+      }
+    } else if (path.includes("/functions/v1/naver-place-search")) {
       state.searches.push(payload.query);
       body = {
         items: [
@@ -492,4 +592,127 @@ test("tutorial explains private groups and completes", async ({ page }) => {
   expect(
     await page.evaluate(() => localStorage.getItem("ccatalog.tutorial.v3")),
   ).toBe("complete");
+});
+
+test("comments are readable by members and only their author gets editing controls", async ({
+  page,
+}, testInfo) => {
+  const { state, errors } = await setup(page);
+  state.comments.push({
+    id: "another",
+    restaurant_id: restaurantId,
+    user_id: otherId,
+    nickname: "친구",
+    body: "친구의 의견",
+    created_at: "2026-10-01T00:00:00Z",
+  });
+  page.on("dialog", (dialog) => dialog.accept());
+  await page.locator(".restaurant-item").first().click();
+  await page.getByRole("button", { name: "의견 · 메달 투표" }).click();
+  await expect(page.locator("#discussionDialog")).toHaveAttribute(
+    "aria-hidden",
+    "false",
+  );
+  await expect(page.locator(".discussion-comment")).toHaveCount(1);
+  await expect(
+    page.locator(".discussion-comment .comment-actions"),
+  ).toHaveCount(0);
+  await expect(page.locator(".vote-options button").first()).toBeDisabled();
+  await page
+    .getByRole("textbox", { name: "의견 작성" })
+    .fill("<script>내 의견</script>");
+  await page
+    .locator(".comment-submit")
+    .getByRole("button", { name: "등록", exact: true })
+    .click();
+  await expect(page.locator(".discussion-comment")).toHaveCount(2);
+  const mine = page
+    .locator(".discussion-comment")
+    .filter({ hasText: "<script>내 의견</script>" });
+  await mine.getByRole("button", { name: "수정", exact: true }).click();
+  await page
+    .getByRole("textbox", { name: "의견 수정" })
+    .fill("메뉴가 좋았어요");
+  await page.getByRole("button", { name: "수정 완료" }).click();
+  await expect(page.locator(".discussion-comment").first()).toContainText(
+    "메뉴가 좋았어요",
+  );
+  await page.screenshot({ path: testInfo.outputPath("discussion.png") });
+  const layout = await page.locator(".discussion-card").boundingBox();
+  expect(layout.x).toBeGreaterThanOrEqual(0);
+  expect(layout.y).toBeGreaterThanOrEqual(0);
+  await page
+    .locator(".discussion-comment")
+    .first()
+    .getByRole("button", { name: "삭제", exact: true })
+    .click();
+  await expect(page.locator(".discussion-comment")).toHaveCount(1);
+  expect(errors).toEqual([]);
+});
+
+test("vote replacement and majority update the medal and start a fresh round", async ({
+  page,
+}) => {
+  const { state, errors } = await setup(page);
+  const record = state.restaurants[1];
+  await page.locator(".restaurant-item").last().click();
+  await page.getByRole("button", { name: "의견 · 메달 투표" }).click();
+  await page.locator(".vote-options button").nth(1).click();
+  await expect(page.locator(".vote-options button").nth(1)).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await page.locator(".vote-options button").first().click();
+  expect(Object.keys(state.votes[record.id])).toHaveLength(1);
+  await expect(page.locator(".vote-options button").first()).toContainText("1");
+  state.votes[record.id].anotherMember = "up";
+  await page.locator(".vote-options button").first().click();
+  await expect(page.locator(".vote-summary .rating-badge")).toContainText(
+    "은메달",
+  );
+  await expect(page.locator(".vote-summary small")).toHaveText("2번째 투표");
+  await expect(page.locator(".vote-options button").first()).toContainText("0");
+  await page.getByRole("button", { name: "의견 닫기" }).click();
+  await expect(
+    page.locator("#selectedCard .card-side .rating-badge"),
+  ).toContainText("은메달");
+  expect(errors).toEqual([]);
+});
+
+test("bronze majority deletes only the chosen group's record", async ({
+  page,
+}) => {
+  const { state, errors } = await setup(page, { duplicate: true });
+  const record = state.restaurants[1];
+  state.votes[record.id] = { anotherMember: "down" };
+  page.on("dialog", (dialog) => dialog.accept());
+  await page.locator(".restaurant-item").last().click();
+  await page.getByRole("button", { name: "의견 · 메달 투표" }).click();
+  await page.locator(".vote-options button").last().click();
+  await expect(page.locator("#discussionDialog")).toHaveAttribute(
+    "aria-hidden",
+    "true",
+  );
+  await expect(page.locator("#resultCount")).toHaveText("1곳");
+  expect(state.restaurants[0].id).toBe(restaurantId);
+  await expect(page.locator(".catalog-notice")).toContainText("삭제된 맛집");
+  expect(errors).toEqual([]);
+});
+
+test("stale vote rounds reload without applying a second medal change", async ({
+  page,
+}) => {
+  const { state } = await setup(page);
+  const record = state.restaurants[1];
+  await page.locator(".restaurant-item").last().click();
+  await page.getByRole("button", { name: "의견 · 메달 투표" }).click();
+  await expect(page.locator(".vote-summary small")).toHaveText("1번째 투표");
+  record.rating = 2;
+  record.vote_round = 2;
+  await page.locator(".vote-options button").first().click();
+  await expect(page.locator("#discussionDialog .auth-error")).toContainText(
+    "새 투표를 확인",
+  );
+  await expect(page.locator(".vote-summary small")).toHaveText("2번째 투표");
+  expect(record.rating).toBe(2);
 });

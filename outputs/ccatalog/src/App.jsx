@@ -13,6 +13,7 @@ import { RestaurantList, RestaurantDetail } from "./components/Restaurants.jsx";
 import RestaurantForm from "./components/RestaurantForm.jsx";
 import { PhotoManager, PhotoViewer } from "./components/PhotoDialogs.jsx";
 import Tutorial from "./components/Tutorial.jsx";
+import DiscussionDialog from "./components/DiscussionDialog.jsx";
 import {
   deliveryLabels,
   normalizeRestaurantPhotos,
@@ -25,7 +26,6 @@ export default function App() {
   const catalog = useCatalog();
   const {
     restaurants,
-    setRestaurants,
     auth,
     isMember,
     ownsRestaurant,
@@ -62,9 +62,29 @@ export default function App() {
   });
   const [viewer, setViewer] = useState({ restaurantId: null, index: 0 });
   const [tutorialOpen, setTutorialOpen] = useState(false);
+  const [notice, setNotice] = useState("");
+  const applyVoteResult = catalog.applyVoteResult;
+  const handleVoteOutcome = useCallback(
+    (result) => {
+      applyVoteResult(result);
+      if (result.outcome === "deleted") {
+        setSelectedId(null);
+        setDialog({ type: null, open: false, restaurant: null });
+        setListOpen(true);
+        setNotice("이 그룹에서 삭제된 맛집입니다");
+      }
+    },
+    [applyVoteResult],
+  );
+  useEffect(() => {
+    if (!notice) return;
+    const timer = setTimeout(() => setNotice(""), 4500);
+    return () => clearTimeout(timer);
+  }, [notice]);
   const dialogRestaurant =
-    restaurants.find((restaurant) => restaurant.id === dialog.restaurant?.id) ||
-    dialog.restaurant;
+    groupedRestaurants.find(
+      (restaurant) => restaurant.id === dialog.restaurant?.id,
+    ) || dialog.restaurant;
   const visibleRestaurants = useMemo(() => {
     const search = query.trim().toLowerCase();
     return groupedRestaurants
@@ -157,7 +177,7 @@ export default function App() {
 
   function closeDialog(restore = true) {
     setDialog((dialog) => ({ ...dialog, open: false }));
-    if (restore && !selectedId) setListOpen(true);
+    if (restore && !selected) setListOpen(true);
   }
   function closeTutorial() {
     setTutorialOpen(false);
@@ -262,10 +282,13 @@ export default function App() {
           break;
         }
       }
-      updateRestaurant({
-        ...saved,
-        photos: normalizeRestaurantPhotos(saved.photos),
-      });
+      updateRestaurant(
+        {
+          ...saved,
+          photos: normalizeRestaurantPhotos(saved.photos),
+        },
+        { isNew: !existing },
+      );
       closeDialog(false);
       setListOpen(false);
       setSelectedId(saved.id);
@@ -291,9 +314,7 @@ export default function App() {
       return;
     try {
       await storeRef.current.remove(restaurant.id);
-      setRestaurants((records) =>
-        records.filter((item) => item.id !== restaurant.id),
-      );
+      applyVoteResult({ outcome: "deleted", restaurant_id: restaurant.id });
       setSelectedId(null);
       closeDialog();
       setListOpen(true);
@@ -419,7 +440,9 @@ export default function App() {
             }}
           />
           <RestaurantDetail
-            restaurant={selected}
+            restaurant={
+              dialog.type === "discussion" && dialog.open ? null : selected
+            }
             catalog={{
               ...catalog,
               onSelectRecord: (id) => {
@@ -431,6 +454,12 @@ export default function App() {
             }}
             onEdit={openForm}
             onDelete={deleteRestaurant}
+            onDiscussion={(restaurant) => {
+              setListOpen(false);
+              setSearchOpen(false);
+              setAuthOpen(false);
+              setDialog({ type: "discussion", open: true, restaurant });
+            }}
             onPhotos={(restaurant) => {
               setSearchOpen(false);
               setListOpen(false);
@@ -442,6 +471,11 @@ export default function App() {
             }
           />
         </section>
+        {notice && (
+          <div className="catalog-notice" role="status">
+            {notice}
+          </div>
+        )}
       </main>
       <RestaurantForm
         open={dialog.type === "spot" && dialog.open}
@@ -458,6 +492,15 @@ export default function App() {
         onUpdate={updateRestaurant}
         onClose={() => closeDialog()}
         canEdit={ownsRestaurant(dialogRestaurant)}
+      />
+      <DiscussionDialog
+        key={`${auth.user?.id}:${dialog.restaurant?.id}`}
+        open={dialog.type === "discussion" && dialog.open}
+        restaurant={dialog.type === "discussion" ? dialogRestaurant : null}
+        userId={auth.user?.id}
+        storeRef={storeRef}
+        onOutcome={handleVoteOutcome}
+        onClose={() => closeDialog()}
       />
       <PhotoViewer
         restaurant={
