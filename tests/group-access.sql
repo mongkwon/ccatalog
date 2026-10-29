@@ -14,7 +14,8 @@ begin
   values(r,g,a,'테스트 식당','한식',2,'서울',37.5,127,'{}','[]','{}','');
   update public.restaurants set memo='작성자 수정' where id=r;
   if (select memo from public.restaurants where id=r) <> '작성자 수정' then raise exception 'author update failed'; end if;
-  begin update public.restaurants set rating=3 where id=r; raise exception 'medal change allowed'; exception when insufficient_privilege then null; end;
+  update public.restaurants set rating=3 where id=r;
+  if (select rating from public.restaurants where id=r)<>3 then raise exception 'author medal edit failed'; end if;
   begin update public.restaurants set created_by=b where id=r; raise exception 'author transfer allowed'; exception when insufficient_privilege then null; end;
   insert into public.restaurant_photos(restaurant_id,storage_path,created_by,sort_order) values(r,r::text||'/test.jpg',a,0);
   insert into storage.objects(bucket_id,name) values('restaurant-photos',r::text||'/test.jpg');

@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Modal, RatingBadge } from "./common.jsx";
-import { RATING_META } from "../lib/domain.js";
 
 const choices = [
   { value: "up", label: "상승", icon: "↑" },
@@ -118,14 +117,6 @@ export default function DiscussionDialog({
   }
   async function vote(choice) {
     if (!snapshot?.can_vote || !snapshot.eligible) return;
-    if (
-      choice === "down" &&
-      snapshot.rating === 1 &&
-      !window.confirm(
-        "하락이 과반수로 확정되면 이 그룹의 맛집과 사진·댓글·투표가 모두 삭제됩니다. 하락에 투표할까요?",
-      )
-    )
-      return;
     await act(async (active) => {
       const actor = storeRef.current.userId;
       const result = await storeRef.current.vote(
@@ -135,13 +126,9 @@ export default function DiscussionDialog({
       );
       if (storeRef.current.userId !== actor) return;
       onOutcome(result);
-      if (!active() || result.outcome === "deleted") return;
+      if (!active()) return;
       await load();
-      setMessage(
-        result.outcome === "pending"
-          ? "투표를 반영했습니다"
-          : `${RATING_META[result.rating].label}로 변경됐습니다. 새 투표가 시작됐어요.`,
-      );
+      setMessage("의견을 반영했습니다");
     });
   }
   function resetDraft() {
@@ -178,26 +165,23 @@ export default function DiscussionDialog({
             <section className="medal-voting" aria-label="메달 투표">
               <div className="vote-summary">
                 <RatingBadge rating={snapshot.rating} />
-                <small>{snapshot.round}번째 투표</small>
+                <small>
+                  응답{" "}
+                  {Object.values(snapshot.votes).reduce(
+                    (sum, count) => sum + count,
+                    0,
+                  )}
+                  명
+                </small>
               </div>
-              <p className="vote-threshold">
-                등록자를 제외한 {snapshot.eligible}명
-                {snapshot.eligible > 0
-                  ? ` 중 ${snapshot.required}명 동의 시 변경`
-                  : " · 그룹원이 참여하면 투표가 열려요"}
-              </p>
+              <p className="vote-threshold">현재 메달에 대한 그룹원의 의견</p>
               <div className="vote-options">
                 {choices.map((choice) => (
                   <button
                     key={choice.value}
                     type="button"
                     aria-pressed={snapshot.mine === choice.value}
-                    disabled={
-                      busy ||
-                      !snapshot.can_vote ||
-                      !snapshot.eligible ||
-                      (choice.value === "up" && snapshot.rating === 3)
-                    }
+                    disabled={busy || !snapshot.can_vote || !snapshot.eligible}
                     onClick={() => vote(choice.value)}
                   >
                     <span aria-hidden="true">{choice.icon}</span>

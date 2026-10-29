@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Modal, SearchIcon } from "./common.jsx";
+import { Camera, ChevronLeft, ChevronRight, X } from "lucide-react";
 import {
   createId,
   DELIVERY_APPS,
@@ -34,7 +35,9 @@ export default function RestaurantForm({
   const [menuPrice, setMenuPrice] = useState("");
   const [delivery, setDelivery] = useState([]);
   const [memo, setMemo] = useState("");
-  const [files, setFiles] = useState([]);
+  const [photos, setPhotos] = useState([]);
+  const previewUrls = useRef(new Set());
+  const photoStrip = useRef(null);
   const [busy, setBusy] = useState(false);
   const nameInput = useRef(null);
   const draftInput = useRef(null);
@@ -69,12 +72,14 @@ export default function RestaurantForm({
     setMenuPrice("");
     setDelivery(restaurant?.deliveryApps ?? []);
     setMemo(restaurant?.memo ?? "");
-    setFiles([]);
+    setPhotos(restaurant?.photos ?? []);
     const timer = setTimeout(() => nameInput.current?.focus(), 30);
     return () => {
       clearTimeout(timer);
       search.current?.abort();
       ++generation.current;
+      previewUrls.current.forEach((url) => URL.revokeObjectURL(url));
+      previewUrls.current.clear();
     };
   }, [open, restaurant]);
 
@@ -168,7 +173,7 @@ export default function RestaurantForm({
     saving.current = true;
     setBusy(true);
     try {
-      await onSave(value, { existing: restaurant, place, files });
+      await onSave(value, { existing: restaurant, place, photos });
     } finally {
       saving.current = false;
       setBusy(false);
@@ -186,251 +191,329 @@ export default function RestaurantForm({
         <div className="modal-header">
           <h2 id="spotDialogTitle">{restaurant ? "맛집 수정" : "맛집 추가"}</h2>
         </div>
-        <div className="form-grid">
-          <label className="field span-2">
-            <span>그룹</span>
-            <select
-              aria-label="등록할 그룹"
-              value={groupId}
-              disabled={Boolean(restaurant)}
-              onChange={(event) => setGroupId(event.target.value)}
-              required
-            >
-              {groups.map((group) => (
-                <option key={group.id} value={group.id}>
-                  {group.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <div className="field span-2 place-field">
-            <label htmlFor="nameInput">이름</label>
-            <div className="place-entry">
-              <input
-                ref={nameInput}
-                id="nameInput"
-                name="name"
-                type="text"
+        <div className="spot-form-body">
+          <div className="form-grid">
+            <label className="field span-2">
+              <span>그룹</span>
+              <select
+                aria-label="등록할 그룹"
+                value={groupId}
+                disabled={Boolean(restaurant)}
+                onChange={(event) => setGroupId(event.target.value)}
                 required
-                maxLength={40}
-                autoComplete="off"
-                enterKeyHint="search"
-                value={name}
-                onChange={(event) => {
-                  search.current?.abort();
-                  ++generation.current;
-                  setSearchBusy(false);
-                  setName(event.target.value);
-                  setPlace(null);
-                  setResults([]);
-                  setMessage("");
-                }}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" && !event.nativeEvent.isComposing) {
-                    event.preventDefault();
-                    searchPlaces();
-                  }
-                }}
-              />
-              <button
-                id="placeSearchButton"
-                className="place-search-button"
-                type="button"
-                aria-label="장소 검색"
-                disabled={searchBusy || busy}
-                onClick={searchPlaces}
               >
-                <SearchIcon />
-              </button>
-            </div>
-            <div
-              id="placeResultList"
-              className={`place-result-list${message || results.length ? "" : " hidden"}`}
-              aria-live="polite"
-            >
-              {message && <div className="place-result-message">{message}</div>}
-              {results.map((candidate, index) => (
+                {groups.map((group) => (
+                  <option key={group.id} value={group.id}>
+                    {group.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="field span-2 place-field">
+              <label htmlFor="nameInput">이름</label>
+              <div className="place-entry">
+                <input
+                  ref={nameInput}
+                  id="nameInput"
+                  name="name"
+                  type="text"
+                  required
+                  maxLength={40}
+                  autoComplete="off"
+                  enterKeyHint="search"
+                  value={name}
+                  onChange={(event) => {
+                    search.current?.abort();
+                    ++generation.current;
+                    setSearchBusy(false);
+                    setName(event.target.value);
+                    setPlace(null);
+                    setResults([]);
+                    setMessage("");
+                  }}
+                  onKeyDown={(event) => {
+                    if (
+                      event.key === "Enter" &&
+                      !event.nativeEvent.isComposing
+                    ) {
+                      event.preventDefault();
+                      searchPlaces();
+                    }
+                  }}
+                />
                 <button
-                  key={`${candidate.name}-${index}`}
-                  className="place-result"
+                  id="placeSearchButton"
+                  className="place-search-button"
                   type="button"
-                  onClick={() => selectPlace(candidate)}
+                  aria-label="장소 검색"
+                  disabled={searchBusy || busy}
+                  onClick={searchPlaces}
                 >
-                  <strong>{candidate.name}</strong>
-                  <span>
-                    {[
-                      candidate.category,
-                      candidate.roadAddress || candidate.address,
-                    ]
-                      .filter(Boolean)
-                      .join(" · ")}
-                  </span>
+                  <SearchIcon />
                 </button>
-              ))}
-            </div>
-          </div>
-          <label className="field span-2">
-            <span>분류</span>
-            <select
-              id="categoryInput"
-              name="category"
-              value={category}
-              onChange={(event) => setCategory(event.target.value)}
-            >
-              {[
-                "한식",
-                "일식",
-                "중식",
-                "양식",
-                "분식",
-                "카페",
-                "바",
-                "기타",
-              ].map((label) => (
-                <option key={label}>{label}</option>
-              ))}
-            </select>
-          </label>
-          <fieldset
-            className="rating-field span-2"
-            disabled={Boolean(restaurant)}
-          >
-            <legend>등급</legend>
-            {Object.entries(RATING_META).map(([value, meta]) => (
-              <label key={value}>
-                <input
-                  type="radio"
-                  name="rating"
-                  value={value}
-                  checked={rating === Number(value)}
-                  onChange={() => setRating(Number(value))}
-                />
-                <span>{meta.label}</span>
-              </label>
-            ))}
-          </fieldset>
-          <div className="menu-field span-2">
-            <span>추천메뉴</span>
-            <div className="menu-entry">
-              <input
-                ref={draftInput}
-                id="menuDraftInput"
-                type="text"
-                maxLength={40}
-                placeholder="메뉴명"
-                autoComplete="off"
-                value={menuName}
-                onChange={(event) => setMenuName(event.target.value)}
-                onKeyDown={draftEnter}
-              />
-              <input
-                id="menuPriceDraftInput"
-                className="menu-price-draft"
-                type="text"
-                inputMode="numeric"
-                maxLength={18}
-                placeholder="가격"
-                autoComplete="off"
-                value={menuPrice}
-                onChange={(event) => setMenuPrice(event.target.value)}
-                onKeyDown={draftEnter}
-              />
-              <button
-                id="addMenuButton"
-                className="menu-add-button"
-                type="button"
-                aria-label="메뉴 추가"
-                onClick={addMenu}
+              </div>
+              <div
+                id="placeResultList"
+                className={`place-result-list${message || results.length ? "" : " hidden"}`}
+                aria-live="polite"
               >
-                <span aria-hidden="true">+</span>
-              </button>
-            </div>
-            <div
-              id="menuInputList"
-              className="menu-input-list"
-              aria-label="추가된 추천메뉴"
-            >
-              {menus.map((item) => (
-                <span className="menu-input-chip" key={item.name}>
-                  <span>{item.name}</span>
-                  <span className="menu-input-price">
-                    {normalizeMenuPrice(item.price) || "가격 미입력"}
-                  </span>
+                {message && (
+                  <div className="place-result-message">{message}</div>
+                )}
+                {results.map((candidate, index) => (
                   <button
+                    key={`${candidate.name}-${index}`}
+                    className="place-result"
                     type="button"
-                    aria-label={`${item.name} 삭제`}
-                    onClick={() => {
-                      setMenus(menus.filter((menu) => menu.name !== item.name));
-                      draftInput.current?.focus();
-                    }}
+                    onClick={() => selectPlace(candidate)}
                   >
-                    ×
+                    <strong>{candidate.name}</strong>
+                    <span>
+                      {[
+                        candidate.category,
+                        candidate.roadAddress || candidate.address,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </span>
                   </button>
-                </span>
+                ))}
+              </div>
+            </div>
+            <label className="field span-2">
+              <span>분류</span>
+              <select
+                id="categoryInput"
+                name="category"
+                value={category}
+                onChange={(event) => setCategory(event.target.value)}
+              >
+                {[
+                  "한식",
+                  "일식",
+                  "중식",
+                  "양식",
+                  "분식",
+                  "카페",
+                  "바",
+                  "기타",
+                ].map((label) => (
+                  <option key={label}>{label}</option>
+                ))}
+              </select>
+            </label>
+            <fieldset className="rating-field span-2">
+              <legend>등급</legend>
+              {Object.entries(RATING_META).map(([value, meta]) => (
+                <label key={value}>
+                  <input
+                    type="radio"
+                    name="rating"
+                    value={value}
+                    checked={rating === Number(value)}
+                    onChange={() => setRating(Number(value))}
+                  />
+                  <span>{meta.label}</span>
+                </label>
+              ))}
+            </fieldset>
+            <div className="menu-field span-2">
+              <span>추천메뉴</span>
+              <div className="menu-entry">
+                <input
+                  ref={draftInput}
+                  id="menuDraftInput"
+                  type="text"
+                  maxLength={40}
+                  placeholder="메뉴명"
+                  autoComplete="off"
+                  value={menuName}
+                  onChange={(event) => setMenuName(event.target.value)}
+                  onKeyDown={draftEnter}
+                />
+                <input
+                  id="menuPriceDraftInput"
+                  className="menu-price-draft"
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={18}
+                  placeholder="가격"
+                  autoComplete="off"
+                  value={menuPrice}
+                  onChange={(event) => setMenuPrice(event.target.value)}
+                  onKeyDown={draftEnter}
+                />
+                <button
+                  id="addMenuButton"
+                  className="menu-add-button"
+                  type="button"
+                  aria-label="메뉴 추가"
+                  onClick={addMenu}
+                >
+                  <span aria-hidden="true">+</span>
+                </button>
+              </div>
+              <div
+                id="menuInputList"
+                className="menu-input-list"
+                aria-label="추가된 추천메뉴"
+              >
+                {menus.map((item) => (
+                  <span className="menu-input-chip" key={item.name}>
+                    <span>{item.name}</span>
+                    <span className="menu-input-price">
+                      {normalizeMenuPrice(item.price) || "가격 미입력"}
+                    </span>
+                    <button
+                      type="button"
+                      aria-label={`${item.name} 삭제`}
+                      onClick={() => {
+                        setMenus(
+                          menus.filter((menu) => menu.name !== item.name),
+                        );
+                        draftInput.current?.focus();
+                      }}
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+            </div>
+            <fieldset className="delivery-field span-2">
+              <legend>배달가능여부</legend>
+              {DELIVERY_APPS.map((app) => (
+                <label key={app.id}>
+                  <input
+                    type="checkbox"
+                    name="deliveryApps"
+                    value={app.id}
+                    checked={delivery.includes(app.id)}
+                    onChange={(event) =>
+                      setDelivery(
+                        event.target.checked
+                          ? [...delivery, app.id]
+                          : delivery.filter((id) => id !== app.id),
+                      )
+                    }
+                  />
+                  <span>{app.label}</span>
+                </label>
+              ))}
+            </fieldset>
+            <label className="field span-2">
+              <span>메모</span>
+              <textarea
+                id="memoInput"
+                name="memo"
+                rows={2}
+                maxLength={180}
+                value={memo}
+                onChange={(event) => setMemo(event.target.value)}
+              />
+            </label>
+          </div>
+          {!!photos.length && (
+            <div
+              ref={photoStrip}
+              className="form-photos"
+              aria-label="맛집 사진"
+            >
+              {photos.map((photo, index) => (
+                <div className="form-photo-item" key={photo.id}>
+                  <img src={photo.url} alt={`사진 ${index + 1}`} />
+                  <div className="form-photo-actions">
+                    <button
+                      type="button"
+                      title="앞으로"
+                      aria-label="사진 앞으로 이동"
+                      disabled={busy || index === 0}
+                      onClick={() =>
+                        setPhotos((current) => {
+                          const next = [...current];
+                          [next[index - 1], next[index]] = [
+                            next[index],
+                            next[index - 1],
+                          ];
+                          return next;
+                        })
+                      }
+                    >
+                      <ChevronLeft size={14} />
+                    </button>
+                    <button
+                      type="button"
+                      title="뒤로"
+                      aria-label="사진 뒤로 이동"
+                      disabled={busy || index === photos.length - 1}
+                      onClick={() =>
+                        setPhotos((current) => {
+                          const next = [...current];
+                          [next[index], next[index + 1]] = [
+                            next[index + 1],
+                            next[index],
+                          ];
+                          return next;
+                        })
+                      }
+                    >
+                      <ChevronRight size={14} />
+                    </button>
+                    <button
+                      type="button"
+                      title="삭제"
+                      aria-label={`사진 ${index + 1} 삭제`}
+                      disabled={busy}
+                      onClick={() => {
+                        if (photo.file) {
+                          URL.revokeObjectURL(photo.url);
+                          previewUrls.current.delete(photo.url);
+                        }
+                        setPhotos((current) =>
+                          current.filter((item) => item.id !== photo.id),
+                        );
+                      }}
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                </div>
               ))}
             </div>
-          </div>
-          <fieldset className="delivery-field span-2">
-            <legend>배달가능여부</legend>
-            {DELIVERY_APPS.map((app) => (
-              <label key={app.id}>
-                <input
-                  type="checkbox"
-                  name="deliveryApps"
-                  value={app.id}
-                  checked={delivery.includes(app.id)}
-                  onChange={(event) =>
-                    setDelivery(
-                      event.target.checked
-                        ? [...delivery, app.id]
-                        : delivery.filter((id) => id !== app.id),
-                    )
-                  }
-                />
-                <span>{app.label}</span>
-              </label>
-            ))}
-          </fieldset>
-          <label className="field span-2">
-            <span>메모</span>
-            <textarea
-              id="memoInput"
-              name="memo"
-              rows={2}
-              maxLength={180}
-              value={memo}
-              onChange={(event) => setMemo(event.target.value)}
-            />
-          </label>
+          )}
         </div>
         <div className="modal-actions">
-          {!restaurant && (
-            <>
-              <label
-                className={`spot-photo-button${files.length ? " has-selection" : ""}`}
-                htmlFor="spotPhotoInput"
-              >
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M14.5 4 16 6h3a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h3l1.5-2h5Z" />
-                  <circle cx="12" cy="12.5" r="3.5" />
-                </svg>
-                <span>{files.length ? `사진 ${files.length}장` : "사진"}</span>
-              </label>
-              <input
-                id="spotPhotoInput"
-                className="visually-hidden"
-                type="file"
-                accept="image/*"
-                multiple
-                disabled={busy}
-                onChange={(event) =>
-                  setFiles(
-                    [...event.target.files].slice(0, RESTAURANT_PHOTO_LIMIT),
-                  )
-                }
-              />
-            </>
-          )}
+          <label
+            className={`spot-photo-button${photos.length ? " has-selection" : ""}${busy || photos.length >= RESTAURANT_PHOTO_LIMIT ? " is-disabled" : ""}`}
+            htmlFor="spotPhotoInput"
+          >
+            <Camera size={18} />
+            <span>
+              사진 {photos.length}/{RESTAURANT_PHOTO_LIMIT}
+            </span>
+          </label>
+          <input
+            id="spotPhotoInput"
+            className="visually-hidden"
+            type="file"
+            accept="image/*"
+            multiple
+            disabled={busy || photos.length >= RESTAURANT_PHOTO_LIMIT}
+            onChange={(event) => {
+              const added = [...event.target.files]
+                .slice(0, RESTAURANT_PHOTO_LIMIT - photos.length)
+                .map((file) => {
+                  const url = URL.createObjectURL(file);
+                  previewUrls.current.add(url);
+                  return { id: createId(), file, url };
+                });
+              setPhotos((current) => [...current, ...added]);
+              requestAnimationFrame(() =>
+                photoStrip.current?.scrollIntoView({ block: "nearest" }),
+              );
+              event.target.value = "";
+            }}
+          />
           <button
             id="spotSubmitButton"
             className="primary-button"

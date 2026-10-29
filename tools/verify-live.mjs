@@ -25,7 +25,9 @@ for (const [name, engine, device] of [
     );
     await page.goto(url, { waitUntil: "domcontentloaded" });
     await page.waitForFunction(
-      () => document.querySelector("#adminButton")?.textContent === "로그인",
+      () =>
+        document.querySelector("#adminButton")?.getAttribute("aria-label") ===
+        "로그인",
       { timeout: 20000 },
     );
     await page.waitForFunction(

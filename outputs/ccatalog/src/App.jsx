@@ -7,11 +7,15 @@ import {
 } from "react";
 import { useCatalog } from "./hooks/useCatalog.js";
 import { useMap } from "./hooks/useMap.js";
-import AccountPanel, { memberName } from "./components/AccountPanel.jsx";
+import AccountPanel, {
+  memberName,
+  MemberAvatar,
+} from "./components/AccountPanel.jsx";
+import { UserRound, Plus } from "lucide-react";
 import FilterDock from "./components/FilterDock.jsx";
 import { RestaurantList, RestaurantDetail } from "./components/Restaurants.jsx";
 import RestaurantForm from "./components/RestaurantForm.jsx";
-import { PhotoManager, PhotoViewer } from "./components/PhotoDialogs.jsx";
+import { PhotoViewer } from "./components/PhotoDialogs.jsx";
 import Tutorial from "./components/Tutorial.jsx";
 import DiscussionDialog from "./components/DiscussionDialog.jsx";
 import {
@@ -19,6 +23,7 @@ import {
   normalizeRestaurantPhotos,
   RESTAURANT_PHOTO_LIMIT,
   TUTORIAL_STORAGE_KEY,
+  photoErrorMessage,
 } from "./lib/domain.js";
 import { prepareRestaurantPhoto } from "./lib/photos.js";
 
@@ -263,28 +268,52 @@ export default function App() {
     setListOpen(true);
     setFilter(value);
   }
-  async function saveRestaurant(value, { existing, files }) {
+  async function saveRestaurant(value, { existing, photos }) {
     if (!canAdd || (existing && !ownsRestaurant(existing))) return;
     try {
-      const blobs = [];
-      for (const file of files.slice(0, RESTAURANT_PHOTO_LIMIT))
-        blobs.push(await prepareRestaurantPhoto(file));
-      const saved = await storeRef.current.save(value, { isNew: !existing });
+      const blobs = new Map();
+      for (const photo of photos.slice(0, RESTAURANT_PHOTO_LIMIT))
+        if (photo.file)
+          blobs.set(photo.id, await prepareRestaurantPhoto(photo.file));
+      const saved = await storeRef.current.save(value, {
+        isNew: !existing,
+        previousRating: existing?.rating,
+      });
       saved.photos = normalizeRestaurantPhotos(existing?.photos);
       let failedPhoto = false;
-      for (const blob of blobs) {
-        try {
-          saved.photos.push(
-            await storeRef.current.addRestaurantPhoto(
-              saved,
-              blob,
-              saved.photos.length,
-            ),
+      try {
+        const retainedIds = new Set(
+          photos.filter((photo) => !photo.file).map((photo) => photo.id),
+        );
+        for (const photo of saved.photos.filter(
+          (photo) => !retainedIds.has(photo.id),
+        ))
+          await storeRef.current.removeRestaurantPhoto(photo);
+        const ordered = [];
+        for (const [index, photo] of photos.entries()) {
+          ordered.push(
+            photo.file
+              ? await storeRef.current.addRestaurantPhoto(
+                  saved,
+                  blobs.get(photo.id),
+                  index,
+                )
+              : photo,
           );
-        } catch {
-          failedPhoto = true;
-          break;
         }
+        await storeRef.current.updateRestaurantPhotoOrder(ordered);
+        saved.photos = ordered.length
+          ? await storeRef.current.restaurantPhotos(saved.id)
+          : [];
+      } catch {
+        failedPhoto = true;
+        const records = await storeRef.current.list();
+        const fresh = records.find((record) => record.id === saved.id);
+        if (!fresh) {
+          closeDialog();
+          return;
+        }
+        saved.photos = fresh.photos;
       }
       updateRestaurant(
         {
@@ -299,14 +328,16 @@ export default function App() {
       setSelectionMotion((value) => value + 1);
       if (failedPhoto)
         window.alert(
-          "맛집은 저장했지만 일부 사진을 올리지 못했습니다. 상세창의 사진 버튼에서 다시 추가해주세요.",
+          "맛집은 저장했지만 일부 사진 변경을 반영하지 못했습니다. 수정 창에서 다시 확인해주세요.",
         );
     } catch (error) {
       console.warn("restaurant save failed", error);
       window.alert(
         error.code === "23505"
           ? "이 그룹에 이미 등록된 맛집입니다"
-          : "맛집을 저장하지 못했습니다. 다시 시도해주세요.",
+          : /photo_/.test(error.message)
+            ? photoErrorMessage(error)
+            : "맛집을 저장하지 못했습니다. 다시 시도해주세요.",
       );
     }
   }
@@ -326,7 +357,6 @@ export default function App() {
       window.alert("맛집을 삭제하지 못했습니다. Supabase 권한을 확인해주세요.");
     }
   }
-  const label = isMember ? "까탈리스트" : "로그인";
   return (
     <>
       <main className="app-shell">
@@ -369,18 +399,6 @@ export default function App() {
               </div>
               <div className="brand-actions">
                 <button
-                  id="adminButton"
-                  className={`brand-admin-button${authOpen ? " is-active" : ""}`}
-                  type="button"
-                  title={isMember ? "내 계정" : "로그인"}
-                  aria-label={isMember ? `${memberName(auth)} 계정` : "로그인"}
-                  aria-controls="authPanel"
-                  aria-expanded={authOpen}
-                  onClick={() => setAuthOpen(!authOpen)}
-                >
-                  {label}
-                </button>
-                <button
                   id="addButton"
                   className={`brand-add-button${dialog.open && dialog.type === "spot" ? " is-active" : ""}`}
                   type="button"
@@ -397,7 +415,26 @@ export default function App() {
                       : openForm();
                   }}
                 >
-                  <span aria-hidden="true">+</span>
+                  <Plus size={20} aria-hidden="true" />
+                </button>
+                <button
+                  id="adminButton"
+                  className={`brand-admin-button${authOpen ? " is-active" : ""}`}
+                  type="button"
+                  title={isMember ? "내 계정" : "로그인"}
+                  aria-label={isMember ? `${memberName(auth)} 계정` : "로그인"}
+                  aria-controls="authPanel"
+                  aria-expanded={authOpen}
+                  onClick={() => {
+                    closeDialog();
+                    setAuthOpen(!authOpen);
+                  }}
+                >
+                  {isMember ? (
+                    <MemberAvatar auth={auth} />
+                  ) : (
+                    <UserRound size={20} aria-hidden="true" />
+                  )}
                 </button>
               </div>
             </div>
@@ -464,12 +501,6 @@ export default function App() {
               setAuthOpen(false);
               setDialog({ type: "discussion", open: true, restaurant });
             }}
-            onPhotos={(restaurant) => {
-              setSearchOpen(false);
-              setListOpen(false);
-              setAuthOpen(false);
-              setDialog({ type: "photos", open: true, restaurant });
-            }}
             onViewPhoto={(restaurantId, index) =>
               setViewer({ restaurantId, index })
             }
@@ -488,14 +519,6 @@ export default function App() {
         config={config}
         onSave={saveRestaurant}
         onPlace={(coord) => map.adapterRef.current?.panTo(coord)}
-      />
-      <PhotoManager
-        open={dialog.type === "photos" && dialog.open}
-        restaurant={dialog.type === "photos" ? dialogRestaurant : null}
-        storeRef={storeRef}
-        onUpdate={updateRestaurant}
-        onClose={() => closeDialog()}
-        canEdit={ownsRestaurant(dialogRestaurant)}
       />
       <DiscussionDialog
         key={`${auth.user?.id}:${dialog.restaurant?.id}`}

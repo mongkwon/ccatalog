@@ -87,7 +87,6 @@ export function RestaurantDetail({
   restaurant,
   catalog,
   onEdit,
-  onPhotos,
   onDelete,
   onViewPhoto,
   onDiscussion,
@@ -196,13 +195,6 @@ export function RestaurantDetail({
                 </a>
                 {catalog.ownsRestaurant(restaurant) && (
                   <>
-                    <button
-                      className="secondary-button"
-                      type="button"
-                      onClick={() => onPhotos(restaurant)}
-                    >
-                      사진
-                    </button>
                     <button
                       className="secondary-button"
                       type="button"

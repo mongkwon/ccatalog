@@ -20,6 +20,27 @@ const colors = [
   "#4e989f",
 ];
 
+export function MemberAvatar({ auth }) {
+  const metadata = auth.user?.user_metadata ?? {};
+  const avatar =
+    auth.profile?.avatar_url || metadata.avatar_url || metadata.picture;
+  const [failed, setFailed] = useState(null);
+  return (
+    <span className="account-avatar">
+      {avatar && avatar !== failed ? (
+        <img
+          src={avatar}
+          alt=""
+          referrerPolicy="no-referrer"
+          onError={() => setFailed(avatar)}
+        />
+      ) : (
+        <span aria-hidden="true">{memberName(auth).slice(0, 1)}</span>
+      )}
+    </span>
+  );
+}
+
 export default function AccountPanel({ catalog, open, onClose }) {
   const {
     auth,

@@ -155,7 +155,7 @@ export class SupabaseRestaurantStore {
       )
       .filter(Boolean);
   }
-  async save(restaurant, { isNew } = {}) {
+  async save(restaurant, { isNew, previousRating } = {}) {
     const menuItems = normalizeMenuItems(
       restaurant.menuItems,
       restaurant.menus,
@@ -171,6 +171,8 @@ export class SupabaseRestaurantStore {
       delivery_apps: normalizeDeliveryApps(restaurant.deliveryApps),
       memo: restaurant.memo,
     };
+    if (isNew || restaurant.rating !== previousRating)
+      payload.rating = restaurant.rating;
     if (isNew)
       Object.assign(payload, {
         id: restaurant.id,
@@ -184,6 +186,16 @@ export class SupabaseRestaurantStore {
     const { data, error } = await query.select(columns).single();
     if (error) throw error;
     return fromRow(data);
+  }
+  async restaurantPhotos(id) {
+    const { data, error } = await this.client
+      .from("restaurant_photos")
+      .select(photoColumns)
+      .eq("restaurant_id", id)
+      .order("sort_order")
+      .order("created_at");
+    if (error) throw error;
+    return this.signedPhotos(data ?? []);
   }
   async remove(id) {
     const result = await this.client
