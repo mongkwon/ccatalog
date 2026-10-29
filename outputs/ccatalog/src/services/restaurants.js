@@ -36,7 +36,7 @@ export class SupabaseRestaurantStore {
       const changed = this.userId !== (session?.user?.id ?? null);
       this.setSession(session);
       if (changed || event === "SIGNED_OUT" || event === "USER_UPDATED")
-        window.setTimeout(() => onAuthChange?.(), 0);
+        window.setTimeout(() => onAuthChange?.({ userChanged: changed }), 0);
     });
     this.authSubscription = result.data.subscription;
   }
@@ -87,6 +87,13 @@ export class SupabaseRestaurantStore {
   async joinGroup(token) {
     const { data, error } = await this.client.rpc("join_catalog_group", {
       p_token: token,
+    });
+    if (error) throw error;
+    return data;
+  }
+  async leaveGroup(groupId) {
+    const { data, error } = await this.client.rpc("leave_catalog_group", {
+      p_group_id: groupId,
     });
     if (error) throw error;
     return data;

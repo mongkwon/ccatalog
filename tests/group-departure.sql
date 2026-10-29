@@ -1,0 +1,57 @@
+-- Fixture accounts and cleanup jobs are rolled back; no real user is removed.
+begin;
+do $$
+declare
+  a uuid:=gen_random_uuid(); b uuid:=gen_random_uuid(); outsider uuid:=gen_random_uuid();
+  g uuid; g2 uuid; r uuid:=gen_random_uuid(); rb uuid:=gen_random_uuid(); r2 uuid:=gen_random_uuid(); replacement uuid:=gen_random_uuid();
+  invitation text; result jsonb;
+begin
+  insert into auth.users(id,is_anonymous,raw_user_meta_data) values(a,false,'{}'),(b,false,'{}'),(outsider,false,'{}');
+  perform set_config('request.jwt.claim.sub',a::text,true); perform set_config('role','authenticated',true);
+  g:=public.create_catalog_group('탈퇴 테스트','#5285bc'); invitation:=public.create_catalog_invite(g);
+  g2:=public.create_catalog_group('보존 그룹','#b87981');
+  insert into public.restaurants(id,group_id,created_by,name,category,rating,area,lat,lng) values(r,g,a,'재등록 식당','한식',2,'서울',37.5,127),(r2,g2,a,'다른 그룹 식당','한식',1,'서울',37.5,127);
+  insert into public.restaurant_photos(restaurant_id,storage_path,created_by,sort_order) values(r,r::text||'/test.jpg',a,0);
+  insert into storage.objects(bucket_id,name) values('restaurant-photos',r::text||'/test.jpg');
+  perform set_config('request.jwt.claim.sub',b::text,true); perform public.join_catalog_group(invitation);
+  insert into public.restaurants(id,group_id,created_by,name,category,rating,area,lat,lng) values(rb,g,b,'남은 회원 식당','한식',1,'서울',37.51,127);
+  insert into public.restaurant_photos(restaurant_id,storage_path,created_by,sort_order) values(rb,rb::text||'/test.jpg',b,0);
+  insert into public.restaurant_comments(restaurant_id,user_id,body) values(r,b,'삭제 대상 식당 의견'),(rb,b,'남을 댓글');
+  perform public.cast_restaurant_vote(r,1,'up');
+  perform set_config('request.jwt.claim.sub',a::text,true);
+  insert into public.restaurant_comments(restaurant_id,user_id,body) values(rb,a,'탈퇴자 댓글'),(r2,a,'다른 그룹 댓글');
+  perform public.cast_restaurant_vote(rb,1,'keep');
+  result:=public.leave_catalog_group(g);
+  if not (result->>'left')::boolean or (result->>'group_deleted')::boolean then raise exception 'first departure result incorrect'; end if;
+  if exists(select 1 from public.restaurants where group_id=g) then raise exception 'departed member can read group'; end if;
+  begin perform public.cast_restaurant_vote(rb,1,'down'); raise exception 'departed member voted'; exception when raise_exception then if sqlerrm<>'restaurant_unavailable' then raise; end if; end;
+  begin insert into public.restaurant_comments(restaurant_id,user_id,body) values(rb,a,'탈퇴 후 댓글'); raise exception 'departed member commented'; exception when insufficient_privilege or not_null_violation then null; end;
+  begin insert into public.restaurants(group_id,created_by,name,category,rating,area,lat,lng) values(g,a,'탈퇴 후 등록','한식',1,'서울',37.5,127); raise exception 'departed member inserted'; exception when insufficient_privilege then null; end;
+  perform set_config('role','postgres',true);
+  if exists(select 1 from public.restaurants where id=r) or exists(select 1 from public.restaurant_photos where restaurant_id=r) or exists(select 1 from public.restaurant_comments where restaurant_id=r) or exists(select 1 from public.restaurant_votes where restaurant_id=r) then raise exception 'owned record cascade failed'; end if;
+  if exists(select 1 from public.restaurant_comments where group_id=g and user_id=a) or exists(select 1 from public.restaurant_votes where group_id=g and user_id=a) then raise exception 'departed comments or votes survived'; end if;
+  if not exists(select 1 from private.restaurant_photo_cleanup where restaurant_id=r) then raise exception 'photo cleanup not queued'; end if;
+  if not exists(select 1 from public.catalog_groups where id=g) or not exists(select 1 from public.restaurants where id=rb) or not exists(select 1 from public.restaurant_comments where restaurant_id=rb and user_id=b) then raise exception 'other member records removed'; end if;
+  if not exists(select 1 from public.restaurants where id=r2) or not exists(select 1 from public.restaurant_comments where restaurant_id=r2 and user_id=a) or not exists(select 1 from public.catalog_group_members where group_id=g2 and user_id=a) then raise exception 'other group changed'; end if;
+  begin insert into public.restaurants(group_id,created_by,name,category,rating,area,lat,lng) values(g,a,'FK 우회','한식',1,'서울',37.5,127); raise exception 'nonmember author FK not enforced'; exception when foreign_key_violation then null; end;
+  perform set_config('request.jwt.claim.sub',a::text,true); perform set_config('role','authenticated',true);
+  perform public.join_catalog_group(invitation);
+  insert into public.restaurants(id,group_id,created_by,name,category,rating,area,lat,lng) values(replacement,g,a,'재등록 식당','한식',2,'서울',37.5,127);
+  if not exists(select 1 from public.restaurants where id=replacement) then raise exception 'reregistration failed'; end if;
+  perform public.leave_catalog_group(g);
+  perform set_config('request.jwt.claim.sub',b::text,true);
+  result:=public.leave_catalog_group(g);
+  if not (result->>'group_deleted')::boolean then raise exception 'last departure did not delete group'; end if;
+  perform set_config('role','postgres',true);
+  if exists(select 1 from public.catalog_groups where id=g) or exists(select 1 from private.catalog_invites where group_id=g) or exists(select 1 from public.catalog_group_members where group_id=g) or exists(select 1 from public.restaurants where id=rb) then raise exception 'last departure cascade failed'; end if;
+  if not exists(select 1 from private.restaurant_photo_cleanup where restaurant_id=rb) then raise exception 'last departure photo cleanup missing'; end if;
+  perform set_config('request.jwt.claim.sub',outsider::text,true); perform set_config('role','authenticated',true);
+  result:=public.leave_catalog_group(g2);
+  if (result->>'left')::boolean then raise exception 'outsider left another group'; end if;
+  begin perform public.join_catalog_group(invitation); raise exception 'deleted group invite worked'; exception when raise_exception then if sqlerrm<>'invalid_invite' then raise; end if; end;
+  perform set_config('role','anon',true);
+  begin perform public.leave_catalog_group(g2); raise exception 'guest called leave'; exception when insufficient_privilege then null; end;
+  perform set_config('role','postgres',true);
+end $$;
+select 'member departure, cascades, photo cleanup, other-group preservation, reregistration and final-group deletion passed' result;
+rollback;

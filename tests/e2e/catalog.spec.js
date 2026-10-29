@@ -24,6 +24,7 @@ async function setup(
     noGroups = false,
     duplicate = false,
     invite = false,
+    withPhoto = false,
   } = {},
 ) {
   const user = {
@@ -118,7 +119,17 @@ async function setup(
         memo: "",
       },
     ],
-    photos: [],
+    photos: withPhoto
+      ? [
+          {
+            id: "initial-photo",
+            restaurant_id: restaurantId,
+            storage_path: `${restaurantId}/initial.png`,
+            created_by: userId,
+            sort_order: 0,
+          },
+        ]
+      : [],
     comments: [],
     votes: {},
     searches: [],
@@ -176,7 +187,14 @@ async function setup(
       body = secondGroupId;
     } else if (path.endsWith("/rpc/create_catalog_invite")) body = invitation;
     else if (path.endsWith("/rpc/join_catalog_group")) body = groupId;
-    else if (
+    else if (path.endsWith("/rpc/leave_catalog_group")) {
+      const leaving = payload.p_group_id;
+      state.groups = state.groups.filter((group) => group.id !== leaving);
+      state.restaurants = state.restaurants.filter(
+        (record) => record.group_id !== leaving,
+      );
+      body = { left: true, group_deleted: state.groups.length === 0 };
+    } else if (
       path.endsWith("/rpc/restaurant_discussion") ||
       path.endsWith("/rpc/cast_restaurant_vote")
     ) {
@@ -309,11 +327,13 @@ async function setup(
       state.signed++;
       body = payload.paths.map((path) => ({
         path,
-        signedURL: `/object/sign/restaurant-photos/${path}?token=fixture`,
+        signedURL: `/object/sign/restaurant-photos/${path}?token=fixture-${state.signed}`,
       }));
-    } else if (path.includes("/storage/v1/object/sign"))
+    } else if (path.includes("/storage/v1/object/sign")) {
+      if (state.imageGate && !url.search.includes("fixture-1"))
+        await state.imageGate;
       return route.fulfill({ contentType: "image/png", body: png });
-    else if (path.includes("/storage/")) body = {};
+    } else if (path.includes("/storage/")) body = {};
     return route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -332,6 +352,82 @@ async function setup(
     .toBe(1);
   return { state, errors };
 }
+
+test("leaving removes only that group and the final departure removes the group", async ({
+  page,
+}) => {
+  const { state, errors } = await setup(page);
+  await page.locator(".restaurant-item").first().click();
+  await page.locator("#adminButton").click();
+  page.once("dialog", (dialog) => dialog.dismiss());
+  await page.getByRole("button", { name: "친구들 탈퇴", exact: true }).click();
+  expect(state.groups).toHaveLength(2);
+  page.on("dialog", (dialog) => dialog.accept());
+  await page.getByRole("button", { name: "친구들 초대 링크 발급" }).click();
+  await expect(
+    page.getByRole("textbox", { name: "초대 링크", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "친구들 탈퇴", exact: true }).click();
+  await expect(page.locator(".account-group-row")).toHaveCount(1);
+  await expect(page.locator("#resultCount")).toHaveText("1곳");
+  await expect(page.locator("#selectedCard")).toHaveClass(/hidden/);
+  await expect(
+    page.getByRole("textbox", { name: "초대 링크", exact: true }),
+  ).toHaveCount(0);
+  expect(state.restaurants[0].name).toBe("테스트카페");
+  await page.getByRole("button", { name: "회사 탈퇴", exact: true }).click();
+  await expect(page.locator(".account-group-row")).toHaveCount(0);
+  await expect(page.locator("#resultCount")).toHaveText("0곳");
+  await expect(page.getByRole("status")).toContainText("마지막 그룹원");
+  expect(errors).toEqual([]);
+});
+
+test("periodic refresh keeps pins and decoded photos stable during URL renewal", async ({
+  page,
+}) => {
+  await page.clock.install();
+  const { state, errors } = await setup(page, { withPhoto: true });
+  await page.locator(".restaurant-item").first().click();
+  const image = page.locator(".restaurant-photo-button img").first();
+  await expect(image).toHaveJSProperty("complete", true);
+  const oldSource = await image.getAttribute("src");
+  await page.evaluate(() => {
+    window.__originalPin = document.querySelector(
+      "#map .pin-marker.is-selected",
+    );
+    window.__beforeRefresh = { ...window.__mapStats };
+    window.__lostList = false;
+    new MutationObserver(() => {
+      if (document.querySelector("#resultCount")?.textContent !== "2곳")
+        window.__lostList = true;
+    }).observe(document.querySelector("#resultCount"), {
+      subtree: true,
+      childList: true,
+      characterData: true,
+    });
+  });
+  let release;
+  state.imageGate = new Promise((resolve) => {
+    release = resolve;
+  });
+  await page.clock.fastForward(120000);
+  await expect.poll(() => state.signed).toBeGreaterThan(1);
+  await expect(image).toHaveAttribute("src", oldSource);
+  expect(
+    await page.evaluate(() => ({
+      samePin:
+        window.__originalPin ===
+        document.querySelector("#map .pin-marker.is-selected"),
+      moves: window.__mapStats.markerMoves - window.__beforeRefresh.markerMoves,
+      icons: window.__mapStats.iconWrites - window.__beforeRefresh.iconWrites,
+      lostList: window.__lostList,
+    })),
+  ).toEqual({ samePin: true, moves: 0, icons: 0, lostList: false });
+  release();
+  await expect(image).not.toHaveAttribute("src", oldSource);
+  await expect(image).toHaveJSProperty("naturalWidth", 1);
+  expect(errors).toEqual([]);
+});
 
 test("filter, search, map and smooth centering retain shared state", async ({
   page,

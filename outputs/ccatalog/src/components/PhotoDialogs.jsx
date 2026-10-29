@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { usePresence } from "./common.jsx";
+import PhotoImage from "./PhotoImage.jsx";
 
 export function PhotoViewer({ restaurant, index, onIndex, onClose }) {
   const { mounted, active } = usePresence(Boolean(restaurant));
@@ -51,7 +52,11 @@ export function PhotoViewer({ restaurant, index, onIndex, onClose }) {
             <span aria-hidden="true">‹</span>
           </button>
           <figure className="photo-viewer-figure">
-            <img src={photo.url} alt={photo.altText || visible.name} />
+            <PhotoImage
+              key={photo.id}
+              photo={photo}
+              alt={photo.altText || visible.name}
+            />
             <figcaption>
               {visible.name} · {index + 1} / {visible.photos.length}
             </figcaption>

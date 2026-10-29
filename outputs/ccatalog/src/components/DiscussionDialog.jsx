@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Modal, RatingBadge } from "./common.jsx";
+import { reconcileById, reuseValue } from "../lib/reconcile.js";
 
 const choices = [
   { value: "up", label: "상승", icon: "↑" },
@@ -41,7 +42,7 @@ export default function DiscussionDialog({
     try {
       const value = await storeRef.current.discussion(restaurant.id, cursor);
       if (scope.current !== current || request !== readRevision.current) return;
-      setSnapshot(value);
+      setSnapshot((previous) => reuseValue(previous, value));
       onOutcome({
         restaurant_id: restaurant.id,
         rating: value.rating,
@@ -57,7 +58,7 @@ export default function DiscussionDialog({
                   (item) => !previous.some((old) => old.id === item.id),
                 ),
               ]
-            : page,
+            : reconcileById(previous, page),
         );
         setHasMore(value.comments.length > 20);
       }

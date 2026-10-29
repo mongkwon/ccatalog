@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Modal, SearchIcon } from "./common.jsx";
+import PhotoImage from "./PhotoImage.jsx";
 import { Camera, ChevronLeft, ChevronRight, X } from "lucide-react";
 import {
   createId,
@@ -45,6 +46,10 @@ export default function RestaurantForm({
   const generation = useRef(0);
   const saving = useRef(false);
   const [groupId, setGroupId] = useState("");
+  useEffect(() => {
+    if (open && !restaurant && !groups.some((group) => group.id === groupId))
+      setGroupId(groups[0]?.id || "");
+  }, [open, restaurant, groups, groupId]);
   useEffect(() => {
     ++generation.current;
     search.current?.abort();
@@ -421,7 +426,7 @@ export default function RestaurantForm({
             >
               {photos.map((photo, index) => (
                 <div className="form-photo-item" key={photo.id}>
-                  <img src={photo.url} alt={`사진 ${index + 1}`} />
+                  <PhotoImage photo={photo} alt={`사진 ${index + 1}`} />
                   <div className="form-photo-actions">
                     <button
                       type="button"

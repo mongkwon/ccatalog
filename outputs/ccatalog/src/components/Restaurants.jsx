@@ -1,4 +1,5 @@
 import { RatingBadge } from "./common.jsx";
+import PhotoImage from "./PhotoImage.jsx";
 import {
   deliveryLabels,
   deliverySummary,
@@ -116,8 +117,8 @@ export function RestaurantDetail({
                   aria-label={`사진 ${index + 1} 크게 보기`}
                   onClick={() => onViewPhoto(restaurant.id, index)}
                 >
-                  <img
-                    src={photo.url}
+                  <PhotoImage
+                    photo={photo}
                     alt={photo.altText || restaurant.name}
                     loading="lazy"
                     decoding="async"

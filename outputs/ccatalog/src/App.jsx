@@ -250,6 +250,33 @@ export default function App() {
       setViewer({ restaurantId: null, index: 0 });
     }
   }, [canAdd, auth.user?.id]);
+  useEffect(() => {
+    const groups = new Set(auth.groups.map((group) => group.id));
+    if (
+      dialog.open &&
+      dialog.restaurant &&
+      !groups.has(dialog.restaurant.groupId)
+    ) {
+      setDialog({ type: null, open: false, restaurant: null });
+      setListOpen(true);
+    }
+    if (selectedId && !restaurants.some((item) => item.id === selectedId)) {
+      setSelectedId(null);
+      setListOpen(true);
+    }
+    if (
+      viewer.restaurantId &&
+      !restaurants.some((item) => item.id === viewer.restaurantId)
+    )
+      setViewer({ restaurantId: null, index: 0 });
+  }, [
+    auth.groups,
+    restaurants,
+    selectedId,
+    dialog.open,
+    dialog.restaurant,
+    viewer.restaurantId,
+  ]);
 
   function openForm(restaurant = null) {
     if (!canAdd || (restaurant && !ownsRestaurant(restaurant))) return;

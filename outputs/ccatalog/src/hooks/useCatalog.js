@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { SupabaseRestaurantStore } from "../services/restaurants.js";
+import { reconcileById, reuseValue } from "../lib/reconcile.js";
 
 const emptyAuth = {
   status: "loading",
@@ -19,6 +20,7 @@ export function useCatalog() {
   const storeRef = useRef(null);
   const revision = useRef(0);
   const dataRevision = useRef(0);
+  const loadedUserId = useRef(null);
 
   const syncAuth = useCallback(async (store = storeRef.current) => {
     if (!store) return;
@@ -26,9 +28,26 @@ export function useCatalog() {
     try {
       const context = await store.getMemberContext();
       if (request !== revision.current) return;
-      setRestaurants([]);
-      setAuth({ ...context, status: "ready", error: "" });
+      if (loadedUserId.current !== (context.user?.id ?? null))
+        setRestaurants([]);
+      loadedUserId.current = context.user?.id ?? null;
+      const publishAuth = () =>
+        setAuth((current) =>
+          reuseValue(current, {
+            ...current,
+            ...context,
+            groups: reconcileById(current.groups, context.groups),
+            status: "ready",
+            error: "",
+          }),
+        );
+      publishAuth();
       if (!context.user) return;
+      const groupIds = new Set(context.groups.map((group) => group.id));
+      setRestaurants((current) => {
+        const next = current.filter((item) => groupIds.has(item.groupId));
+        return next.length === current.length ? current : next;
+      });
       const token = sessionStorage.getItem("ccatalog.pendingInvite");
       if (token) {
         try {
@@ -40,23 +59,28 @@ export function useCatalog() {
           history.replaceState(null, "", url);
           setInviteMessage("그룹에 참여했습니다");
           context.groups = await store.listGroups();
-          setAuth({ ...context, status: "ready", error: "" });
+          publishAuth();
         } catch {
           if (request !== revision.current) return;
           sessionStorage.removeItem("ccatalog.pendingInvite");
           setInviteMessage("유효하지 않은 초대 링크입니다");
         }
       }
+      const dataRequest = dataRevision.current;
       const records = await store.list();
-      if (request === revision.current) setRestaurants(records);
+      if (request === revision.current && dataRequest === dataRevision.current)
+        setRestaurants((current) => reconcileById(current, records));
     } catch (error) {
       if (request !== revision.current) return;
       console.warn("catalog connection failed", error);
-      setRestaurants([]);
+      const sameAccount = Boolean(
+        store.userId && store.userId === loadedUserId.current,
+      );
+      if (!sameAccount) setRestaurants([]);
       setAuth((current) => ({
         ...current,
-        status: "unavailable",
-        error: "그룹 정보를 불러오지 못했습니다. 다시 시도해주세요.",
+        status: sameAccount ? current.status : "unavailable",
+        error: "그룹 정보를 갱신하지 못했습니다. 다시 시도해주세요.",
       }));
     }
   }, []);
@@ -83,11 +107,14 @@ export function useCatalog() {
         if (!config.supabaseUrl || !config.supabaseAnonKey)
           throw new Error("config_missing");
         store = new SupabaseRestaurantStore(config);
-        await store.init(() => {
+        await store.init(({ userChanged }) => {
           if (!alive) return;
           ++revision.current;
-          setRestaurants([]);
-          setAuth(emptyAuth);
+          if (userChanged || !store.userId) {
+            loadedUserId.current = null;
+            setRestaurants([]);
+            setAuth(emptyAuth);
+          }
           syncAuth(store);
         });
         if (!alive) return store.authSubscription?.unsubscribe();
@@ -118,18 +145,54 @@ export function useCatalog() {
     const dataRequest = dataRevision.current;
     const records = await storeRef.current.list();
     if (request === revision.current && dataRequest === dataRevision.current)
-      setRestaurants(records);
+      setRestaurants((current) => reconcileById(current, records));
     return records;
   }, []);
   useEffect(() => {
     if (!auth.user) return;
     // Refresh private image URLs before their three-minute expiry.
-    const timer = setInterval(
-      () => refreshRestaurants().catch(() => {}),
-      120000,
-    );
+    const timer = setInterval(() => {
+      if (document.visibilityState === "visible") syncAuth();
+    }, 120000);
     return () => clearInterval(timer);
-  }, [auth.user?.id, refreshRestaurants]);
+  }, [auth.user?.id, syncAuth]);
+  useEffect(() => {
+    const changed = (event) => {
+      if (event.key !== "ccatalog.groups.changed") return;
+      try {
+        if (JSON.parse(event.newValue)?.userId === storeRef.current?.userId)
+          syncAuth();
+      } catch {
+        /* Ignore unrelated storage changes. */
+      }
+    };
+    window.addEventListener("storage", changed);
+    return () => window.removeEventListener("storage", changed);
+  }, [syncAuth]);
+  const leaveGroup = useCallback(async (groupId) => {
+    const actor = storeRef.current.userId;
+    const result = await storeRef.current.leaveGroup(groupId);
+    if (actor !== storeRef.current.userId) return result;
+    ++revision.current;
+    ++dataRevision.current;
+    setRestaurants((current) =>
+      current.filter((item) => item.groupId !== groupId),
+    );
+    setAuth((current) => ({
+      ...current,
+      groups: current.groups.filter((group) => group.id !== groupId),
+    }));
+    setHiddenGroups((ids) => ids.filter((id) => id !== groupId));
+    try {
+      localStorage.setItem(
+        "ccatalog.groups.changed",
+        JSON.stringify({ userId: actor, at: Date.now() }),
+      );
+    } catch {
+      /* The local departure still completes. */
+    }
+    return result;
+  }, []);
   const updateRestaurant = useCallback((restaurant, { isNew = false } = {}) => {
     ++dataRevision.current;
     setRestaurants((records) => {
@@ -189,6 +252,7 @@ export function useCatalog() {
     applyVoteResult,
     isMember,
     ownsRestaurant,
+    leaveGroup,
     hiddenGroups,
     setHiddenGroups,
     inviteMessage,

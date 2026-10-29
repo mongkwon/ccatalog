@@ -460,6 +460,21 @@ button {
   width: auto;
   flex: 0 0 auto;
 }
+.group-leave-button {
+  display: grid;
+  place-items: center;
+  flex: 0 0 36px;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--soft-ink);
+}
+.group-leave-button:disabled {
+  opacity: 0.4;
+}
 .group-create-form {
   display: grid;
   gap: 10px;

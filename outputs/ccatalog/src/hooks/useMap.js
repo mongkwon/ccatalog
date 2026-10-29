@@ -51,7 +51,13 @@ export function useMap({
         accuracy: Number(position.coords.accuracy),
       };
       if (!isValidCoordinate(coord)) return;
-      setUserLocation(coord);
+      setUserLocation((previous) =>
+        previous?.lat === coord.lat &&
+        previous?.lng === coord.lng &&
+        previous?.accuracy === coord.accuracy
+          ? previous
+          : coord,
+      );
       active?.setUserLocation(coord);
       if (!center || current.current.selectedId) return;
       const nearby = current.current.restaurants

@@ -2,6 +2,8 @@
   const stats = (window.__mapStats = {
     created: 0,
     destroyed: 0,
+    markerMoves: 0,
+    iconWrites: 0,
     pans: [],
     fits: [],
   });
@@ -82,6 +84,7 @@
       this.setMap(options.map);
     }
     setIcon(icon) {
+      stats.iconWrites++;
       this.icon = icon;
       if (!this.element) {
         this.element = document.createElement("div");
@@ -107,6 +110,7 @@
       }
     }
     setPosition(coord) {
+      stats.markerMoves++;
       this.position = coord;
       this.draw();
     }

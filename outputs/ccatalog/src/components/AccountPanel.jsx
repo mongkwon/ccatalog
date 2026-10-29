@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { authErrorMessage } from "../lib/domain.js";
+import { LogOut } from "lucide-react";
 
 export function memberName(auth) {
   const metadata = auth.user?.user_metadata ?? {};
@@ -51,12 +52,14 @@ export default function AccountPanel({ catalog, open, onClose }) {
     hiddenGroups,
     setHiddenGroups,
     inviteMessage,
+    leaveGroup,
   } = catalog;
   const [busy, setBusy] = useState(false);
   const [name, setName] = useState("");
   const [color, setColor] = useState(colors[0]);
   const [link, setLink] = useState("");
   const [notice, setNotice] = useState("");
+  const [linkGroupId, setLinkGroupId] = useState(null);
   async function act(action) {
     if (busy) return;
     setBusy(true);
@@ -163,6 +166,7 @@ export default function AccountPanel({ catalog, open, onClose }) {
                         group.id,
                       );
                       setLink(value);
+                      setLinkGroupId(group.id);
                       try {
                         await navigator.clipboard.writeText(value);
                         setNotice("초대 링크를 복사했습니다");
@@ -173,6 +177,35 @@ export default function AccountPanel({ catalog, open, onClose }) {
                   }
                 >
                   초대
+                </button>
+                <button
+                  type="button"
+                  className="group-leave-button"
+                  aria-label={`${group.name} 탈퇴`}
+                  title="그룹 탈퇴"
+                  disabled={busy}
+                  onClick={() => {
+                    if (
+                      !window.confirm(
+                        `${group.name}에서 탈퇴할까요? 이 그룹에 등록한 맛집·사진과 남긴 댓글·표가 삭제됩니다. 마지막 그룹원이라면 그룹도 삭제됩니다.`,
+                      )
+                    )
+                      return;
+                    act(async () => {
+                      const result = await leaveGroup(group.id);
+                      if (linkGroupId === group.id) {
+                        setLink("");
+                        setLinkGroupId(null);
+                      }
+                      setNotice(
+                        result.group_deleted
+                          ? "마지막 그룹원이 탈퇴해 그룹을 삭제했습니다"
+                          : "그룹에서 탈퇴했습니다",
+                      );
+                    });
+                  }}
+                >
+                  <LogOut size={16} aria-hidden="true" />
                 </button>
               </div>
             ))}

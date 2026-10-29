@@ -269,9 +269,16 @@ class NaverMapAdapter {
       const content = pinHtml(restaurant, selectedId);
       const existing = this.markers.get(restaurant.id);
       if (existing) {
-        existing.marker.setPosition(
-          new window.naver.maps.LatLng(restaurant.lat, restaurant.lng),
-        );
+        if (
+          existing.lat !== restaurant.lat ||
+          existing.lng !== restaurant.lng
+        ) {
+          existing.marker.setPosition(
+            new window.naver.maps.LatLng(restaurant.lat, restaurant.lng),
+          );
+          existing.lat = restaurant.lat;
+          existing.lng = restaurant.lng;
+        }
         if (existing.content !== content) {
           existing.marker.setIcon({
             content,
@@ -295,7 +302,13 @@ class NaverMapAdapter {
         "click",
         () => this.onSelect?.(restaurant.id),
       );
-      this.markers.set(restaurant.id, { marker, listener, content });
+      this.markers.set(restaurant.id, {
+        marker,
+        listener,
+        content,
+        lat: restaurant.lat,
+        lng: restaurant.lng,
+      });
     });
     this.setUserLocation(userLocation);
   }
@@ -304,12 +317,18 @@ class NaverMapAdapter {
     if (!coord || !isValidCoordinate(coord) || !this.map) {
       this.userMarker?.setMap(null);
       this.userMarker = null;
+      this.userCoord = null;
       return;
     }
 
     const position = new window.naver.maps.LatLng(coord.lat, coord.lng);
     if (this.userMarker) {
-      this.userMarker.setPosition(position);
+      if (
+        this.userCoord?.lat !== coord.lat ||
+        this.userCoord?.lng !== coord.lng
+      )
+        this.userMarker.setPosition(position);
+      this.userCoord = { lat: coord.lat, lng: coord.lng };
       return;
     }
 
@@ -324,6 +343,7 @@ class NaverMapAdapter {
         anchor: new window.naver.maps.Point(12, 12),
       },
     });
+    this.userCoord = { lat: coord.lat, lng: coord.lng };
   }
 
   setClickHandler(handler) {
