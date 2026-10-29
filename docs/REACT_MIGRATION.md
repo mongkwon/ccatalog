@@ -85,6 +85,17 @@ GitHub Actions가 `npm ci`와 데이터 변환 테스트를 수행한 뒤 공개
 Vite 빌드는 Pages 기본 경로 `/ccatalog/`로 생성하고 `dist/`만 배포한다.
 원본 JS, SQL, 테스트 파일은 정적 배포 산출물에 포함되지 않는다.
 
+## 배포 CSS 블러 회귀 수정
+
+React 이주 배포 후 CSS 압축기가 표준 `backdrop-filter`를 제거하고 접두사 선언만 남기는 문제가 확인됐다.
+Chromium의 계산된 블러 값이 `none`이 되어 유리 표면이 단순 투명 배경으로 표시됐다.
+모든 블러 선언을 `-webkit-backdrop-filter` 다음에 표준 선언이 오도록 정리했다.
+`npm test`에 실제 Vite 빌드 결과를 검사하는 회귀 테스트를 추가했다.
+`npm run build` 후 `npm run test:glass`로 압축 CSS를 Chromium과 모바일 WebKit에서 검사할 수 있다.
+Chromium은 블러를 켜고 끈 스크린샷의 픽셀 차이까지 비교한다.
+현재 Playwright WebKit 환경은 최소 재현 화면에서도 블러를 스크린샷에 그리지 않아, 해당 환경에서는 두 선언의 계산된 스타일을 검증한다.
+실제 iPhone의 시각 확인은 별도로 필요하다.
+
 ## 다음 단계
 
 `DEVELOPMENT_HANDOFF.md`의 미확정 그룹 권한과 투표 정책을 확인하고, 그룹/초대/RLS/사진 비공개 접근부터 설계한다.

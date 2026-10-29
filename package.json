@@ -10,8 +10,9 @@
     "dev": "vite --host 127.0.0.1 --port 4174",
     "build": "vite build",
     "preview": "vite preview --host 127.0.0.1 --port 4174",
-    "test": "node --test tests/domain.test.js",
-    "test:e2e": "playwright test"
+    "test": "node --test tests/*.test.js",
+    "test:e2e": "playwright test",
+    "test:glass": "playwright test --config=playwright.glass.config.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.118.0",

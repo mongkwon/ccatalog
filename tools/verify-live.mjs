@@ -32,6 +32,9 @@ for (const [name, engine, device] of [
       { timeout: 20000 },
     );
     await page.waitForTimeout(1200);
+    const glassFilters = await page.evaluate(() => Object.fromEntries(
+      [".brand", ".bottom-dock", ".search-panel", ".restaurant-panel", ".selected-card"].map((selector) => [selector, getComputedStyle(document.querySelector(selector)).getPropertyValue("backdrop-filter")])
+    ));
     await page.screenshot({ path: `test-results/live/${name}-list.png` });
     await page.locator(".restaurant-item").first().click();
     await page.waitForTimeout(700);
@@ -47,11 +50,12 @@ for (const [name, engine, device] of [
         url,
         result,
         errors,
+        glassFilters,
         mapVisible: await page.locator("#map").isVisible(),
         listCount: await page.locator(".restaurant-item").count(),
       }),
     );
-    if (errors.length || result !== "0곳") process.exitCode = 1;
+    if (errors.length || result !== "0곳" || Object.values(glassFilters).some((value) => !value.includes("blur("))) process.exitCode = 1;
   } catch (error) {
     console.error(JSON.stringify({ name, message: error.message, errors }));
     process.exitCode = 1;
