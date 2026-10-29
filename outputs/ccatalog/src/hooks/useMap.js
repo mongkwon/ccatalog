@@ -25,6 +25,7 @@ export function useMap({
   const adapterRef = useRef(null);
   const [adapter, setAdapter] = useState(null);
   const [userLocation, setUserLocation] = useState(null);
+  const [center, setCenter] = useState(null);
   const current = useRef({
     restaurants,
     visibleRestaurants,
@@ -43,6 +44,7 @@ export function useMap({
     let alive = true;
     let active;
     let watchId;
+    let unsubscribeIdle;
     function locationChanged(position, center = false) {
       if (!alive) return;
       const coord = {
@@ -109,6 +111,18 @@ export function useMap({
         return;
       }
       adapterRef.current = active;
+      const updateCenter = () => {
+        if (!alive) return;
+        const next = active.getCenter();
+        if (isValidCoordinate(next))
+          setCenter((previous) =>
+            previous?.lat === next.lat && previous?.lng === next.lng
+              ? previous
+              : next,
+          );
+      };
+      unsubscribeIdle = active.subscribeIdle(updateCenter);
+      updateCenter();
       setAdapter(active);
       if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
@@ -143,6 +157,7 @@ export function useMap({
       alive = false;
       stopWatch();
       window.removeEventListener("pagehide", stopWatch);
+      unsubscribeIdle?.();
       active?.destroy();
       adapterRef.current = null;
     };
@@ -166,6 +181,7 @@ export function useMap({
     mockHost,
     mockPins,
     adapterRef,
+    center,
     userLocation,
     setUserLocation,
   };

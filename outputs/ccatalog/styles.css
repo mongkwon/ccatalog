@@ -621,8 +621,7 @@ button {
   overflow: hidden;
 }
 
-.brand-admin-button,
-.brand-add-button {
+.brand-admin-button {
   display: grid;
   height: 44px;
   place-items: center;
@@ -719,44 +718,22 @@ button {
   overscroll-behavior: contain;
 }
 
-.brand-add-button {
-  width: 0;
-  border-width: 0;
-  border-radius: 50%;
-  opacity: 0;
-  pointer-events: none;
-  transform: scale(0.82);
-}
-
-.brand-admin-button.is-active,
-.brand-add-button.is-active {
+.brand-admin-button.is-active {
   border-color: rgba(17, 24, 32, 0.16);
   background: rgba(17, 24, 32, 0.04);
 }
 
 .brand-admin-button:focus,
 .brand-admin-button:focus-visible,
-.brand-admin-button:active,
-.brand-add-button:focus,
-.brand-add-button:focus-visible,
-.brand-add-button:active {
+.brand-admin-button:active {
   outline: 0;
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .brand-admin-button:hover,
-  .brand-add-button:hover {
+  .brand-admin-button:hover {
     border-color: rgba(17, 24, 32, 0.16);
     background: rgba(17, 24, 32, 0.04);
   }
-}
-
-body.has-add-access .brand-add-button {
-  width: 44px;
-  border-width: 1px;
-  opacity: 1;
-  pointer-events: auto;
-  transform: scale(1);
 }
 
 .auth-panel {
@@ -1004,13 +981,6 @@ body.has-add-access .brand-add-button {
   opacity: 0.56;
 }
 
-.brand-add-button span {
-  transform: translateY(-2px);
-  font-size: 31px;
-  font-weight: 500;
-  line-height: 1;
-}
-
 .brand h1 {
   display: flex;
   margin: 0;
@@ -1203,12 +1173,31 @@ body.has-add-access .brand-add-button {
   display: flex;
   min-width: 0;
   flex-direction: row;
-  align-items: flex-start;
-  justify-content: flex-start;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   overflow: hidden;
   padding: 0 2px;
   color: var(--muted);
   font-size: 12px;
+}
+
+.list-add-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  flex: 0 0 auto;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid rgba(17, 24, 32, 0.08);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.2);
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .panel-meta strong {
@@ -1654,6 +1643,29 @@ body.has-add-access .brand-add-button {
   display: grid;
   gap: 6px;
   margin-top: 0;
+}
+
+.branch-search-link {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  max-width: 100%;
+  min-height: 36px;
+  margin-top: 4px;
+  color: var(--soft-ink);
+  font-size: 12px;
+  line-height: 1.4;
+  text-decoration: none;
+}
+
+.branch-search-link span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.branch-search-link svg {
+  flex-shrink: 0;
 }
 
 .selected-card .link-button,
@@ -3240,8 +3252,7 @@ body.has-add-access .brand-add-button {
     height: 27px;
   }
 
-  .brand-admin-button,
-  .brand-add-button {
+  .brand-admin-button {
     width: 44px;
     height: 44px;
   }
@@ -3249,18 +3260,6 @@ body.has-add-access .brand-add-button {
   .brand-admin-button {
     width: 44px;
     font-size: 11px;
-  }
-
-  .brand-add-button {
-    width: 0;
-  }
-
-  body.has-add-access .brand-add-button {
-    width: 44px;
-  }
-
-  .brand-add-button span {
-    font-size: 29px;
   }
 
   .restaurant-panel {

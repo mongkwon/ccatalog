@@ -25,6 +25,7 @@ async function setup(
     duplicate = false,
     invite = false,
     withPhoto = false,
+    branched = false,
   } = {},
 ) {
   const user = {
@@ -92,7 +93,7 @@ async function setup(
         id: restaurantId,
         group_id: groupId,
         created_by: userId,
-        name: "테스트면옥",
+        name: branched ? "정돈 논현점" : "테스트면옥",
         category: "한식",
         rating: 3,
         area: "서울 중구",
@@ -352,6 +353,74 @@ async function setup(
     .toBe(1);
   return { state, errors };
 }
+
+test("restaurant list follows the map center without removing offscreen records", async ({
+  page,
+}) => {
+  const { errors } = await setup(page);
+  await expect(page.locator(".user-location-marker")).toBeVisible();
+  await expect(page.locator(".restaurant-item h3").first()).toHaveText(
+    "테스트면옥",
+  );
+  const before = await page.evaluate(() => ({
+    pans: window.__mapStats.pans.length,
+    icons: window.__mapStats.iconWrites,
+  }));
+  await page.evaluate(() =>
+    window.__testMap.panTo(new window.naver.maps.LatLng(37.572, 126.985)),
+  );
+  await expect(page.locator(".restaurant-item h3").first()).toHaveText(
+    "테스트카페",
+  );
+  await expect(page.locator("#resultCount")).toHaveText("2곳");
+  expect(
+    await page.evaluate(() => ({
+      created: window.__mapStats.created,
+      pans: window.__mapStats.pans.length,
+      icons: window.__mapStats.iconWrites,
+    })),
+  ).toEqual({ created: 1, pans: before.pans + 1, icons: before.icons });
+  await page.locator('.dock-filter-button[data-filter="3"]').click();
+  await expect(page.locator(".restaurant-item h3")).toHaveText("테스트면옥");
+  await expect(page.locator("#resultCount")).toHaveText("1곳");
+  await page.locator('.dock-filter-button[data-filter="all"]').click();
+  await expect(page.locator(".restaurant-item h3").first()).toHaveText(
+    "테스트카페",
+  );
+  await page.evaluate(() =>
+    window.__testMap.panTo(new window.naver.maps.LatLng(37.5666, 126.978)),
+  );
+  await expect(page.locator(".restaurant-item h3").first()).toHaveText(
+    "테스트면옥",
+  );
+  expect(errors).toEqual([]);
+});
+
+test("branch names offer a brand search in a separate Naver Maps tab", async ({
+  page,
+}) => {
+  await setup(page, { branched: true });
+  await page.locator(".restaurant-item").first().click();
+  const link = page.getByRole("link", {
+    name: "네이버지도에서 다른 지점 찾기",
+  });
+  await expect(link).toHaveAttribute(
+    "href",
+    `https://map.naver.com/p/search/${encodeURIComponent("정돈")}`,
+  );
+  await expect(link).toHaveAttribute("target", "_blank");
+  await expect(
+    page.getByRole("link", { name: "네이버지도", exact: true }),
+  ).toHaveAttribute(
+    "href",
+    `https://map.naver.com/p/search/${encodeURIComponent("정돈 논현점")}`,
+  );
+  await page
+    .locator(".restaurant-item")
+    .filter({ hasText: "테스트카페" })
+    .click();
+  await expect(link).toHaveCount(0);
+});
 
 test("leaving removes only that group and the final departure removes the group", async ({
   page,
@@ -688,13 +757,19 @@ test("author uploads private photos, reorders, views and deletes them", async ({
   expect(errors).toEqual([]);
 });
 
-test("header uses circular add and profile buttons while the dock stays unchanged", async ({
+test("list header holds add action and profile stays circular while dock is unchanged", async ({
   page,
 }, testInfo) => {
   await setup(page);
   const add = await page.locator("#addButton").boundingBox();
   const profile = await page.locator("#adminButton").boundingBox();
-  expect(add.x + add.width).toBeLessThanOrEqual(profile.x);
+  const count = await page.locator("#resultCount").boundingBox();
+  expect(add.x).toBeGreaterThan(count.x + count.width);
+  expect(
+    Math.abs(add.y + add.height / 2 - (count.y + count.height / 2)),
+  ).toBeLessThan(2);
+  await expect(page.locator(".topbar #addButton")).toHaveCount(0);
+  await expect(page.locator(".panel-meta #addButton")).toHaveText("맛집 추가");
   expect(profile.width).toBe(profile.height);
   expect(profile.width).toBe(44);
   await expect(page.locator("#adminButton .account-avatar")).toHaveText("테");
@@ -712,7 +787,9 @@ test("header uses circular add and profile buttons while the dock stays unchange
     path: testInfo.outputPath("photo-form.png"),
     animations: "disabled",
   });
-  await page.locator("#addButton").click();
+  await page.locator("#adminButton").click();
+  await expect(page.locator("#spotDialog")).not.toHaveClass(/is-open/);
+  await page.locator("#adminButton").click();
   await page.locator("#addButton").click();
   await expect(page.locator(".form-photo-item")).toHaveCount(0);
 });

@@ -139,13 +139,22 @@ class MockMapAdapter {
 
   panTo(coord) {
     this.center = coord;
+    this.centerListener?.();
   }
 
   fitToCoordinates(coords) {
     const [firstCoord] = coords.filter(isValidCoordinate);
     if (firstCoord) {
       this.center = firstCoord;
+      this.centerListener?.();
     }
+  }
+
+  subscribeIdle(handler) {
+    this.centerListener = handler;
+    return () => {
+      this.centerListener = null;
+    };
   }
 
   destroy() {
@@ -352,6 +361,15 @@ class NaverMapAdapter {
 
   getCenter() {
     return normaliseNaverCoord(this.map.getCenter());
+  }
+
+  subscribeIdle(handler) {
+    const listener = window.naver.maps.Event.addListener(
+      this.map,
+      "idle",
+      handler,
+    );
+    return () => window.naver.maps.Event.removeListener(listener);
   }
 
   panTo(coord, { accountForCards = false } = {}) {

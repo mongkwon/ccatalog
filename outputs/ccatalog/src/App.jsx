@@ -11,7 +11,7 @@ import AccountPanel, {
   memberName,
   MemberAvatar,
 } from "./components/AccountPanel.jsx";
-import { UserRound, Plus } from "lucide-react";
+import { UserRound } from "lucide-react";
 import FilterDock from "./components/FilterDock.jsx";
 import { RestaurantList, RestaurantDetail } from "./components/Restaurants.jsx";
 import RestaurantForm from "./components/RestaurantForm.jsx";
@@ -26,6 +26,7 @@ import {
   photoErrorMessage,
 } from "./lib/domain.js";
 import { prepareRestaurantPhoto } from "./lib/photos.js";
+import { restaurantsByDistance } from "./lib/restaurant-order.js";
 
 export default function App() {
   const catalog = useCatalog();
@@ -139,6 +140,10 @@ export default function App() {
     selectedId,
     onSelect,
   });
+  const orderedRestaurants = useMemo(
+    () => restaurantsByDistance(visibleRestaurants, map.center),
+    [visibleRestaurants, map.center],
+  );
   useLayoutEffect(() => {
     const classes = {
       "has-add-access": canAdd,
@@ -426,25 +431,6 @@ export default function App() {
               </div>
               <div className="brand-actions">
                 <button
-                  id="addButton"
-                  className={`brand-add-button${dialog.open && dialog.type === "spot" ? " is-active" : ""}`}
-                  type="button"
-                  title="맛집 추가"
-                  aria-label="맛집 추가"
-                  aria-controls="spotDialog"
-                  aria-expanded={dialog.open && dialog.type === "spot"}
-                  aria-hidden={!canAdd}
-                  tabIndex={canAdd ? 0 : -1}
-                  onClick={(event) => {
-                    event.currentTarget.blur();
-                    dialog.open && dialog.type === "spot"
-                      ? closeDialog()
-                      : openForm();
-                  }}
-                >
-                  <Plus size={20} aria-hidden="true" />
-                </button>
-                <button
                   id="adminButton"
                   className={`brand-admin-button${authOpen ? " is-active" : ""}`}
                   type="button"
@@ -472,10 +458,12 @@ export default function App() {
             onClose={() => setAuthOpen(false)}
           />
           <RestaurantList
-            restaurants={visibleRestaurants}
+            restaurants={orderedRestaurants}
             selectedId={selectedId}
             open={listOpen}
             onSelect={onSelect}
+            canAdd={canAdd}
+            onAdd={() => openForm()}
             emptyMessage={
               !isMember
                 ? "로그인하고 그룹의 맛집을 만나보세요"

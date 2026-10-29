@@ -29,6 +29,7 @@
     constructor(host, options) {
       stats.created++;
       this.host = host;
+      window.__testMap = this;
       this.center = options.center;
       this.markers = new Set();
       this.host.style.background = "#e7eff0";
@@ -40,6 +41,7 @@
       this.center = coord;
       stats.pans.push({ lat: coord.lat(), lng: coord.lng() });
       this.draw();
+      this.emitIdle();
     }
     fitBounds(points, options) {
       stats.fits.push({
@@ -51,6 +53,12 @@
         points.reduce((sum, p) => sum + p.lng(), 0) / points.length,
       );
       this.draw();
+      this.emitIdle();
+    }
+    emitIdle() {
+      (this.listeners || [])
+        .filter((listener) => listener.name === "idle")
+        .forEach((listener) => listener.callback());
     }
     getProjection() {
       return {
