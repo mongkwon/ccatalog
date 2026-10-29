@@ -16,29 +16,43 @@ for (const [name, engine, device] of [
       permissions: ["geolocation"],
     });
     const page = await context.newPage();
-    page.on("pageerror", (error) => { errors.push(error.message); console.error(JSON.stringify({ name, pageError: error.stack })); });
+    page.on("pageerror", (error) => {
+      errors.push(error.message);
+      console.error(JSON.stringify({ name, pageError: error.stack }));
+    });
     await page.addInitScript(() =>
-      localStorage.setItem("ccatalog.tutorial.v2", "complete"),
+      localStorage.setItem("ccatalog.tutorial.v3", "complete"),
     );
     await page.goto(url, { waitUntil: "domcontentloaded" });
     await page.waitForFunction(
-      () => document.querySelectorAll(".restaurant-item").length > 0,
+      () => document.querySelector("#adminButton")?.textContent === "로그인",
       { timeout: 20000 },
     );
     await page.waitForFunction(
-      () =>
-        document.querySelector("#map")?.querySelector(".pin-marker") &&
-        document.querySelector(".user-location-marker"),
+      () => document.querySelector(".user-location-marker"),
       { timeout: 20000 },
     );
     await page.waitForTimeout(1200);
-    const glassFilters = await page.evaluate(() => Object.fromEntries(
-      [".brand", ".bottom-dock", ".search-panel", ".restaurant-panel", ".selected-card"].map((selector) => [selector, getComputedStyle(document.querySelector(selector)).getPropertyValue("backdrop-filter")])
-    ));
+    const glassFilters = await page.evaluate(() =>
+      Object.fromEntries(
+        [
+          ".brand",
+          ".bottom-dock",
+          ".search-panel",
+          ".restaurant-panel",
+          ".selected-card",
+        ].map((selector) => [
+          selector,
+          getComputedStyle(document.querySelector(selector)).getPropertyValue(
+            "backdrop-filter",
+          ),
+        ]),
+      ),
+    );
     await page.screenshot({ path: `test-results/live/${name}-list.png` });
-    await page.locator(".restaurant-item").first().click();
-    await page.waitForTimeout(700);
-    await page.screenshot({ path: `test-results/live/${name}-detail.png` });
+    await page.locator("#adminButton").click();
+    await page.getByRole("button", { name: "카카오로 시작하기" }).waitFor();
+    await page.screenshot({ path: `test-results/live/${name}-guest.png` });
     await page.locator("#searchToggle").click();
     await page.locator("#searchInput").fill("없는식당테스트");
     await page.waitForTimeout(600);
@@ -55,7 +69,12 @@ for (const [name, engine, device] of [
         listCount: await page.locator(".restaurant-item").count(),
       }),
     );
-    if (errors.length || result !== "0곳" || Object.values(glassFilters).some((value) => !value.includes("blur("))) process.exitCode = 1;
+    if (
+      errors.length ||
+      result !== "0곳" ||
+      Object.values(glassFilters).some((value) => !value.includes("blur("))
+    )
+      process.exitCode = 1;
   } catch (error) {
     console.error(JSON.stringify({ name, message: error.message, errors }));
     process.exitCode = 1;

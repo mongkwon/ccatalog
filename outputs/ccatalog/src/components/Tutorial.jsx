@@ -88,13 +88,11 @@ export default function Tutorial({ open, onClose }) {
           ) : step.visual === "catalist" ? (
             <div
               className="tutorial-catalist-path"
-              aria-label="방문 세 곳 인증 후 까탈리스트"
+              aria-label="까탈리스트들의 그룹 공유"
             >
-              <span>1</span>
-              <span>2</span>
-              <span>3</span>
-              <i>→</i>
               <strong>까탈리스트</strong>
+              <i>↔</i>
+              <strong>우리 그룹</strong>
             </div>
           ) : (
             <div className="tutorial-purpose" aria-label="까탈로그의 기준">

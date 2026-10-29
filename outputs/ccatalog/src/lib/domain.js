@@ -1,5 +1,5 @@
 const STORAGE_KEY = "ccatalog.restaurants.v1";
-const TUTORIAL_STORAGE_KEY = "ccatalog.tutorial.v2";
+const TUTORIAL_STORAGE_KEY = "ccatalog.tutorial.v3";
 const SUPABASE_TABLE = "restaurants";
 const RESTAURANT_PHOTO_BUCKET = "restaurant-photos";
 const RESTAURANT_PHOTO_LIMIT = 8;
@@ -19,9 +19,7 @@ const INITIAL_REVEAL_BOUNDS_OPTIONS = {
 };
 const USER_LOCATION_TIMEOUT_MS = 7000;
 const USER_LOCATION_MAX_AGE_MS = 5 * 60 * 1000;
-const VISIT_LOCATION_TIMEOUT_MS = 12000;
-const VISIT_RADIUS_METERS = 500;
-const VISIT_MAX_ACCURACY_METERS = 200;
+const LOCATION_WATCH_TIMEOUT_MS = 12000;
 const MOCK_BOUNDS = {
   latMin: 37.47,
   latMax: 37.62,
@@ -49,7 +47,7 @@ const TUTORIAL_STEPS = [
     visual: "purpose",
     title: "까탈스러운 맛집 로그",
     description:
-      "엄격한 취향으로 고른 음식점과 추천 메뉴를 기록하는 지도입니다.",
+      "엄격한 취향으로 고른 음식점과 추천 메뉴를 기록하고, 초대한 사람들과 나누는 지도입니다.",
   },
   {
     target: "bottomDock",
@@ -63,9 +61,9 @@ const TUTORIAL_STEPS = [
     target: "adminButton",
     placement: "bottom",
     visual: "catalist",
-    title: "세 번의 동의로 까탈리스트",
+    title: "우리끼리 나누는 맛집",
     description:
-      "현장에서 위치를 인증하고 현재 메달에 동의한 방문이 3곳이면, 새로운 음식점 등록을 건의할 수 있습니다.",
+      "로그인하면 누구나 까탈리스트. 그룹을 만들고 초대 링크를 공유하세요. 그룹원끼리 맛집을 볼 수 있고, 각자 등록한 맛집을 관리합니다.",
   },
 ];
 
@@ -273,6 +271,8 @@ function normalizeRestaurant(item) {
   );
   return {
     id: String(item.id || createId()),
+    groupId: String(item.groupId || ""),
+    createdBy: String(item.createdBy || ""),
     name: String(item.name || "이름 없음"),
     category: String(item.category || "기타"),
     rating,
@@ -364,30 +364,6 @@ function stripHtml(value) {
   return (template.content.textContent || "").trim();
 }
 
-export function proposalReviewErrorMessage(error) {
-  const message = String(error?.message || "");
-  if (message.includes("proposal_already_reviewed"))
-    return "이미 처리된 맛집 건의입니다";
-  if (message.includes("restaurant_already_exists"))
-    return "같은 위치의 음식점이 이미 등록되어 있습니다";
-  if (message.includes("proposal_not_approvable"))
-    return "등록 기준에 맞지 않아 승인할 수 없습니다";
-  if (message.includes("admin_required"))
-    return "관리자만 맛집 건의를 검토할 수 있습니다";
-  return "맛집 건의를 처리하지 못했습니다";
-}
-
-export function proposalErrorMessage(error) {
-  const message = String(error?.message || "");
-  if (message.includes("catalist_required"))
-    return "까탈리스트만 맛집을 건의할 수 있습니다.";
-  if (message.includes("restaurant_already_exists"))
-    return "이미 까탈로그에 등록된 음식점입니다.";
-  if (message.includes("proposal_already_pending"))
-    return "이미 검토 중인 맛집 건의가 있습니다.";
-  return "맛집 건의를 접수하지 못했습니다. 잠시 후 다시 시도해주세요.";
-}
-
 function menuItemsSummary(menuItems, limit = 2) {
   return menuItems.slice(0, limit).map(menuItemLabel).join(" · ");
 }
@@ -435,30 +411,6 @@ function photoErrorMessage(error) {
   return "사진을 처리하지 못했습니다. 잠시 후 다시 시도해주세요";
 }
 
-function visitErrorMessage(error) {
-  const message = String(error?.message || "");
-  if (message.includes("location_denied"))
-    return "위치 권한을 허용해야 방문을 인증할 수 있습니다";
-  if (message.includes("location_timeout"))
-    return "위치 확인 시간이 초과됐습니다. 다시 시도해주세요";
-  if (
-    message.includes("location_unavailable") ||
-    message.includes("location_unsupported")
-  )
-    return "현재 위치를 확인할 수 없습니다";
-  if (message.includes("location_inaccurate"))
-    return "위치 정확도가 낮습니다. 창가나 야외에서 다시 시도해주세요";
-  if (message.includes("too_far"))
-    return "음식점에서 500m 이내일 때 인증할 수 있습니다";
-  if (message.includes("already_confirmed"))
-    return "이미 방문 인증한 음식점입니다";
-  if (message.includes("rating_changed"))
-    return "등급이 변경됐습니다. 상세 정보를 다시 확인해주세요";
-  if (message.includes("agreement_required"))
-    return "현재 메달 평가에 동의해주세요";
-  return "방문을 인증하지 못했습니다. 잠시 후 다시 시도해주세요";
-}
-
 export {
   STORAGE_KEY,
   TUTORIAL_STORAGE_KEY,
@@ -475,9 +427,7 @@ export {
   INITIAL_REVEAL_BOUNDS_OPTIONS,
   USER_LOCATION_TIMEOUT_MS,
   USER_LOCATION_MAX_AGE_MS,
-  VISIT_LOCATION_TIMEOUT_MS,
-  VISIT_RADIUS_METERS,
-  VISIT_MAX_ACCURACY_METERS,
+  LOCATION_WATCH_TIMEOUT_MS,
   MOCK_BOUNDS,
   RATING_META,
   RATING_VALUES,
@@ -510,5 +460,4 @@ export {
   deliveryShortLabels,
   authErrorMessage,
   photoErrorMessage,
-  visitErrorMessage,
 };

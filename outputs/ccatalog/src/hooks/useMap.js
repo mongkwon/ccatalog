@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { mapRecords } from "../lib/groups.js";
 import { NaverMapAdapter, MockMapAdapter } from "../services/maps.js";
 import {
   isValidCoordinate,
@@ -7,7 +8,7 @@ import {
   INITIAL_REVEAL_RESTAURANT_LIMIT,
   USER_LOCATION_TIMEOUT_MS,
   USER_LOCATION_MAX_AGE_MS,
-  VISIT_LOCATION_TIMEOUT_MS,
+  LOCATION_WATCH_TIMEOUT_MS,
 } from "../lib/domain.js";
 
 export function useMap({
@@ -16,7 +17,6 @@ export function useMap({
   restaurants,
   visibleRestaurants,
   selectedId,
-  visitedIds,
   onSelect,
 }) {
   const mapHost = useRef(null);
@@ -29,14 +29,12 @@ export function useMap({
     restaurants,
     visibleRestaurants,
     selectedId,
-    visitedIds,
     onSelect,
   });
   current.current = {
     restaurants,
     visibleRestaurants,
     selectedId,
-    visitedIds,
     onSelect,
   };
 
@@ -121,7 +119,7 @@ export function useMap({
           () => {},
           {
             enableHighAccuracy: true,
-            timeout: VISIT_LOCATION_TIMEOUT_MS,
+            timeout: LOCATION_WATCH_TIMEOUT_MS,
             maximumAge: 15000,
           },
         );
@@ -144,15 +142,18 @@ export function useMap({
     };
   }, [config, ready]);
 
+  const pins = useMemo(
+    () => mapRecords(visibleRestaurants, selectedId),
+    [visibleRestaurants, selectedId],
+  );
   useEffect(() => {
     adapter?.render(
-      visibleRestaurants,
+      pins,
       selectedId,
       (id) => current.current.onSelect(id, { closePanel: true }),
       userLocation,
-      visitedIds,
     );
-  }, [adapter, visibleRestaurants, selectedId, userLocation, visitedIds]);
+  }, [adapter, pins, selectedId, userLocation]);
 
   return {
     mapHost,

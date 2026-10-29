@@ -17,7 +17,7 @@ import {
 export default function RestaurantForm({
   open,
   restaurant,
-  mode,
+  groups,
   config,
   onSave,
   onPlace,
@@ -41,12 +41,13 @@ export default function RestaurantForm({
   const search = useRef(null);
   const generation = useRef(0);
   const saving = useRef(false);
-  const isProposal = mode === "proposal";
+  const [groupId, setGroupId] = useState("");
   useEffect(() => {
     ++generation.current;
     search.current?.abort();
     if (!open) return;
     setName(restaurant?.name ?? "");
+    setGroupId(restaurant?.groupId || groups[0]?.id || "");
     setPlace(
       restaurant
         ? {
@@ -140,6 +141,7 @@ export default function RestaurantForm({
   async function submit(event) {
     event.preventDefault();
     if (saving.current || !open) return;
+    if (!groups.some((group) => group.id === groupId)) return;
     if (!place || name.trim() !== place.name) {
       setMessage("장소 검색 결과에서 식당을 선택해주세요");
       nameInput.current?.focus();
@@ -152,6 +154,7 @@ export default function RestaurantForm({
     );
     const value = {
       id: restaurant?.id || createId(),
+      groupId,
       name: place.name,
       area: place.area,
       lat: place.lat,
@@ -165,7 +168,7 @@ export default function RestaurantForm({
     saving.current = true;
     setBusy(true);
     try {
-      await onSave(value, { existing: restaurant, mode, place, files });
+      await onSave(value, { existing: restaurant, place, files });
     } finally {
       saving.current = false;
       setBusy(false);
@@ -181,11 +184,25 @@ export default function RestaurantForm({
     <Modal id="spotDialog" labelId="spotDialogTitle" open={open}>
       <form id="spotForm" className="modal-card" onSubmit={submit}>
         <div className="modal-header">
-          <h2 id="spotDialogTitle">
-            {isProposal ? "맛집 건의" : restaurant ? "맛집 수정" : "맛집 추가"}
-          </h2>
+          <h2 id="spotDialogTitle">{restaurant ? "맛집 수정" : "맛집 추가"}</h2>
         </div>
         <div className="form-grid">
+          <label className="field span-2">
+            <span>그룹</span>
+            <select
+              aria-label="등록할 그룹"
+              value={groupId}
+              disabled={Boolean(restaurant)}
+              onChange={(event) => setGroupId(event.target.value)}
+              required
+            >
+              {groups.map((group) => (
+                <option key={group.id} value={group.id}>
+                  {group.name}
+                </option>
+              ))}
+            </select>
+          </label>
           <div className="field span-2 place-field">
             <label htmlFor="nameInput">이름</label>
             <div className="place-entry">
@@ -274,7 +291,10 @@ export default function RestaurantForm({
               ))}
             </select>
           </label>
-          <fieldset className="rating-field span-2">
+          <fieldset
+            className="rating-field span-2"
+            disabled={Boolean(restaurant)}
+          >
             <legend>등급</legend>
             {Object.entries(RATING_META).map(([value, meta]) => (
               <label key={value}>
@@ -384,7 +404,7 @@ export default function RestaurantForm({
           </label>
         </div>
         <div className="modal-actions">
-          {!isProposal && !restaurant && (
+          {!restaurant && (
             <>
               <label
                 className={`spot-photo-button${files.length ? " has-selection" : ""}`}
@@ -417,7 +437,7 @@ export default function RestaurantForm({
             type="submit"
             disabled={busy}
           >
-            {busy ? "저장 중" : isProposal ? "건의하기" : "저장"}
+            {busy ? "저장 중" : "저장"}
           </button>
         </div>
       </form>

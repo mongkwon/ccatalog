@@ -6,9 +6,6 @@ import {
   RATING_META,
   escapeHtml,
   isValidCoordinate,
-  distanceKmBetween,
-  VISIT_RADIUS_METERS,
-  VISIT_MAX_ACCURACY_METERS,
 } from "../lib/domain.js";
 
 function loadScript(src, checkReady, timeoutMs = 7000, callbackName = "") {
@@ -99,7 +96,7 @@ class MockMapAdapter {
     this.mockMap.addEventListener("click", this.onMapClick);
   }
 
-  render(restaurants, selectedId, onSelect, userLocation, visitedIds = []) {
+  render(restaurants, selectedId, onSelect, userLocation) {
     this.pinsLayer.innerHTML = "";
     const fragment = document.createDocumentFragment();
     if (userLocation && isValidCoordinate(userLocation)) {
@@ -118,7 +115,6 @@ class MockMapAdapter {
         selectedId,
         onSelect,
         userLocation,
-        visitedIds,
       );
       const position = this.coordToPoint({
         lat: restaurant.lat,
@@ -260,7 +256,7 @@ class NaverMapAdapter {
     }
   }
 
-  render(restaurants, selectedId, onSelect, userLocation, visitedIds = []) {
+  render(restaurants, selectedId, onSelect, userLocation) {
     const visibleIds = new Set(restaurants.map((restaurant) => restaurant.id));
     this.markers.forEach((entry, id) => {
       if (visibleIds.has(id)) return;
@@ -270,7 +266,7 @@ class NaverMapAdapter {
     });
     this.onSelect = onSelect;
     restaurants.forEach((restaurant) => {
-      const content = pinHtml(restaurant, selectedId, userLocation, visitedIds);
+      const content = pinHtml(restaurant, selectedId);
       const existing = this.markers.get(restaurant.id);
       if (existing) {
         existing.marker.setPosition(
@@ -477,31 +473,20 @@ function normaliseNaverCoord(coord) {
 
 export { MockMapAdapter, NaverMapAdapter, normaliseNaverCoord };
 
-function pinHtml(restaurant, selectedId, userLocation, visitedIds) {
-  const nearby =
-    userLocation &&
-    isValidCoordinate(userLocation) &&
-    userLocation.accuracy <= VISIT_MAX_ACCURACY_METERS &&
-    distanceKmBetween(userLocation, restaurant) * 1000 <= VISIT_RADIUS_METERS &&
-    !visitedIds.includes(restaurant.id);
+function pinHtml(restaurant, selectedId) {
   const meta = RATING_META[restaurant.rating];
-  return `<button type="button" class="pin-marker${restaurant.id === selectedId ? " is-selected" : ""}${nearby ? " is-nearby" : ""}" data-rating="${restaurant.rating}" aria-label="${escapeHtml(restaurant.name)} ${meta.label}${nearby ? " 방문 인증 가능" : ""}"><span class="pin-head"><span class="pin-level">${meta.icon}</span></span></button>`;
+  const colors = (restaurant.pinColors || []).filter((color) =>
+    /^#[0-9a-f]{6}$/i.test(color),
+  );
+  const stripe = colors.length
+    ? `<span class="pin-groups">${colors.map((color) => `<i style="background-color:${color}"></i>`).join("")}</span>`
+    : "";
+  return `<button type="button" class="pin-marker${restaurant.id === selectedId ? " is-selected" : ""}" data-rating="${restaurant.rating}" aria-label="${escapeHtml(restaurant.name)} ${meta.label}"><span class="pin-head"><span class="pin-level">${meta.icon}</span>${stripe}</span></button>`;
 }
 
-function createPinElement(
-  restaurant,
-  selectedId,
-  onSelect,
-  userLocation,
-  visitedIds,
-) {
+function createPinElement(restaurant, selectedId, onSelect, userLocation) {
   const template = document.createElement("template");
-  template.innerHTML = pinHtml(
-    restaurant,
-    selectedId,
-    userLocation,
-    visitedIds,
-  );
+  template.innerHTML = pinHtml(restaurant, selectedId);
   const button = template.content.firstElementChild;
   button.addEventListener("click", (event) => {
     event.stopPropagation();

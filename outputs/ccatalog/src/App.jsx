@@ -7,20 +7,15 @@ import {
 } from "react";
 import { useCatalog } from "./hooks/useCatalog.js";
 import { useMap } from "./hooks/useMap.js";
-import AccountPanel, {
-  memberName,
-  modeLabel,
-} from "./components/AccountPanel.jsx";
+import AccountPanel, { memberName } from "./components/AccountPanel.jsx";
 import FilterDock from "./components/FilterDock.jsx";
 import { RestaurantList, RestaurantDetail } from "./components/Restaurants.jsx";
 import RestaurantForm from "./components/RestaurantForm.jsx";
 import { PhotoManager, PhotoViewer } from "./components/PhotoDialogs.jsx";
-import ProposalReview from "./components/ProposalReview.jsx";
 import Tutorial from "./components/Tutorial.jsx";
 import {
   deliveryLabels,
   normalizeRestaurantPhotos,
-  proposalErrorMessage,
   RESTAURANT_PHOTO_LIMIT,
   TUTORIAL_STORAGE_KEY,
 } from "./lib/domain.js";
@@ -32,17 +27,27 @@ export default function App() {
     restaurants,
     setRestaurants,
     auth,
-    mode,
-    setMode,
     isMember,
-    isAdmin,
-    isCatalist,
+    ownsRestaurant,
+    hiddenGroups,
     ready,
     config,
     storeRef,
-    syncAuth,
     updateRestaurant,
   } = catalog;
+  const canAdd = isMember && auth.groups.length > 0;
+  const groupMap = useMemo(
+    () => new Map(auth.groups.map((group) => [group.id, group])),
+    [auth.groups],
+  );
+  const groupedRestaurants = useMemo(
+    () =>
+      restaurants.map((restaurant) => ({
+        ...restaurant,
+        group: groupMap.get(restaurant.groupId),
+      })),
+    [restaurants, groupMap],
+  );
   const [selectedId, setSelectedId] = useState(null);
   const [selectionMotion, setSelectionMotion] = useState(0);
   const [query, setQuery] = useState("");
@@ -62,9 +67,10 @@ export default function App() {
     dialog.restaurant;
   const visibleRestaurants = useMemo(() => {
     const search = query.trim().toLowerCase();
-    return restaurants
+    return groupedRestaurants
       .filter(
         (restaurant) =>
+          !hiddenGroups.includes(restaurant.groupId) &&
           (filter === "all" || String(restaurant.rating) === filter) &&
           (!search ||
             [
@@ -83,7 +89,7 @@ export default function App() {
       .sort(
         (a, b) => b.rating - a.rating || a.name.localeCompare(b.name, "ko"),
       );
-  }, [restaurants, query, filter]);
+  }, [groupedRestaurants, query, filter, hiddenGroups]);
   const selected =
     visibleRestaurants.find((restaurant) => restaurant.id === selectedId) ||
     null;
@@ -102,13 +108,11 @@ export default function App() {
     restaurants,
     visibleRestaurants,
     selectedId,
-    visitedIds: auth.visitedRestaurantIds,
     onSelect,
   });
   useLayoutEffect(() => {
     const classes = {
-      "has-add-access": isAdmin || isCatalist,
-      "is-admin-mode": isAdmin,
+      "has-add-access": canAdd,
       "is-list-open": listOpen,
       "is-search-open": searchOpen,
       "is-tutorial-open": tutorialOpen,
@@ -120,7 +124,7 @@ export default function App() {
       Object.keys(classes).forEach((name) =>
         document.body.classList.remove(name),
       );
-  }, [isAdmin, isCatalist, listOpen, searchOpen, tutorialOpen]);
+  }, [canAdd, listOpen, searchOpen, tutorialOpen]);
 
   useLayoutEffect(() => {
     if (!selectedId) return;
@@ -211,13 +215,15 @@ export default function App() {
   }, [tutorialOpen, viewer.restaurantId, dialog.open, searchOpen, selectedId]);
 
   useEffect(() => {
-    if (!isAdmin && !isCatalist) closeDialog();
-    else if (!isAdmin && ["photos", "review"].includes(dialog.type))
-      closeDialog();
-  }, [isAdmin, isCatalist]);
+    if (!canAdd) {
+      setDialog({ type: null, open: false, restaurant: null });
+      setSelectedId(null);
+      setViewer({ restaurantId: null, index: 0 });
+    }
+  }, [canAdd, auth.user?.id]);
 
   function openForm(restaurant = null) {
-    if (!isAdmin && !isCatalist) return;
+    if (!canAdd || (restaurant && !ownsRestaurant(restaurant))) return;
     setSearchOpen(false);
     setListOpen(false);
     setSelectedId(null);
@@ -225,14 +231,7 @@ export default function App() {
       type: "spot",
       open: true,
       restaurant,
-      mode: isAdmin ? "restaurant" : "proposal",
     });
-  }
-  function setAccountMode(value) {
-    if (auth.isAdmin) {
-      closeDialog();
-      setMode(value);
-    }
   }
   function setActiveFilter(value) {
     closeDialog(false);
@@ -240,17 +239,9 @@ export default function App() {
     setListOpen(true);
     setFilter(value);
   }
-  async function saveRestaurant(value, { existing, mode, place, files }) {
-    const proposal = mode === "proposal";
-    if (proposal ? !isCatalist : !isAdmin) return;
+  async function saveRestaurant(value, { existing, files }) {
+    if (!canAdd || (existing && !ownsRestaurant(existing))) return;
     try {
-      if (proposal) {
-        await storeRef.current.submitRestaurantProposal(value, place);
-        await syncAuth();
-        closeDialog();
-        setAuthOpen(true);
-        return;
-      }
       const blobs = [];
       for (const file of files.slice(0, RESTAURANT_PHOTO_LIMIT))
         blobs.push(await prepareRestaurantPhoto(file));
@@ -286,14 +277,18 @@ export default function App() {
     } catch (error) {
       console.warn("restaurant save failed", error);
       window.alert(
-        proposal
-          ? proposalErrorMessage(error)
-          : "맛집을 저장하지 못했습니다. Supabase 설정과 권한을 확인해주세요.",
+        error.code === "23505"
+          ? "이 그룹에 이미 등록된 맛집입니다"
+          : "맛집을 저장하지 못했습니다. 다시 시도해주세요.",
       );
     }
   }
   async function deleteRestaurant(restaurant) {
-    if (!isAdmin || !window.confirm(`${restaurant.name}을 삭제할까요?`)) return;
+    if (
+      !ownsRestaurant(restaurant) ||
+      !window.confirm(`${restaurant.name}을 삭제할까요?`)
+    )
+      return;
     try {
       await storeRef.current.remove(restaurant.id);
       setRestaurants((records) =>
@@ -306,13 +301,7 @@ export default function App() {
       window.alert("맛집을 삭제하지 못했습니다. Supabase 권한을 확인해주세요.");
     }
   }
-  const label = !isMember
-    ? "로그인"
-    : auth.isAdmin
-      ? modeLabel(mode)
-      : auth.profile?.is_catalist
-        ? "까탈리스트"
-        : "회원";
+  const label = isMember ? "까탈리스트" : "로그인";
   return (
     <>
       <main className="app-shell">
@@ -370,12 +359,12 @@ export default function App() {
                   id="addButton"
                   className={`brand-add-button${dialog.open && dialog.type === "spot" ? " is-active" : ""}`}
                   type="button"
-                  title={isAdmin ? "맛집 추가" : "맛집 건의"}
-                  aria-label={isAdmin ? "맛집 추가" : "맛집 건의"}
+                  title="맛집 추가"
+                  aria-label="맛집 추가"
                   aria-controls="spotDialog"
                   aria-expanded={dialog.open && dialog.type === "spot"}
-                  aria-hidden={!(isAdmin || isCatalist)}
-                  tabIndex={isAdmin || isCatalist ? 0 : -1}
+                  aria-hidden={!canAdd}
+                  tabIndex={canAdd ? 0 : -1}
                   onClick={(event) => {
                     event.currentTarget.blur();
                     dialog.open && dialog.type === "spot"
@@ -392,19 +381,19 @@ export default function App() {
             catalog={catalog}
             open={authOpen}
             onClose={() => setAuthOpen(false)}
-            onMode={setAccountMode}
-            onReview={() => {
-              setAuthOpen(false);
-              setSearchOpen(false);
-              setListOpen(false);
-              setDialog({ type: "review", open: true });
-            }}
           />
           <RestaurantList
             restaurants={visibleRestaurants}
             selectedId={selectedId}
             open={listOpen}
             onSelect={onSelect}
+            emptyMessage={
+              !isMember
+                ? "로그인하고 그룹의 맛집을 만나보세요"
+                : !auth.groups.length
+                  ? "계정에서 그룹을 만들거나 초대 링크로 참여하세요"
+                  : undefined
+            }
           />
           <FilterDock
             filter={filter}
@@ -431,10 +420,15 @@ export default function App() {
           />
           <RestaurantDetail
             restaurant={selected}
-            catalog={catalog}
-            userLocation={map.userLocation}
-            onLocation={map.setUserLocation}
-            onLogin={() => setAuthOpen(true)}
+            catalog={{
+              ...catalog,
+              onSelectRecord: (id) => {
+                setQuery("");
+                setFilter("all");
+                catalog.setHiddenGroups([]);
+                onSelect(id);
+              },
+            }}
             onEdit={openForm}
             onDelete={deleteRestaurant}
             onPhotos={(restaurant) => {
@@ -452,7 +446,7 @@ export default function App() {
       <RestaurantForm
         open={dialog.type === "spot" && dialog.open}
         restaurant={dialog.type === "spot" ? dialog.restaurant : null}
-        mode={dialog.mode}
+        groups={auth.groups}
         config={config}
         onSave={saveRestaurant}
         onPlace={(coord) => map.adapterRef.current?.panTo(coord)}
@@ -463,7 +457,7 @@ export default function App() {
         storeRef={storeRef}
         onUpdate={updateRestaurant}
         onClose={() => closeDialog()}
-        canEdit={isAdmin}
+        canEdit={ownsRestaurant(dialogRestaurant)}
       />
       <PhotoViewer
         restaurant={
@@ -472,11 +466,6 @@ export default function App() {
         index={viewer.index}
         onIndex={(index) => setViewer((value) => ({ ...value, index }))}
         onClose={() => setViewer((value) => ({ ...value, restaurantId: null }))}
-      />
-      <ProposalReview
-        open={dialog.type === "review" && dialog.open}
-        catalog={catalog}
-        onClose={() => closeDialog()}
       />
       <Tutorial open={tutorialOpen} onClose={closeTutorial} />
     </>

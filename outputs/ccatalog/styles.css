@@ -32,7 +32,10 @@
   --dock-motion: 520ms cubic-bezier(0.24, 0.58, 0.24, 1);
   --dock-fade: 300ms ease;
   --floating-gap: 18px;
-  --floating-bottom: calc(var(--dock-bottom) + env(safe-area-inset-bottom, 0px) + var(--dock-height) + var(--floating-gap));
+  --floating-bottom: calc(
+    var(--dock-bottom) + env(safe-area-inset-bottom, 0px) + var(--dock-height) +
+      var(--floating-gap)
+  );
   --modal-open-transform: translateX(-50%);
   --modal-closed-transform: translate(-50%, 10px) scale(0.985);
   color-scheme: light;
@@ -97,9 +100,21 @@ button {
   position: relative;
   overflow: hidden;
   background:
-    radial-gradient(circle at 14% 18%, rgba(136, 204, 232, 0.24), transparent 28%),
-    radial-gradient(circle at 80% 14%, rgba(255, 215, 148, 0.22), transparent 30%),
-    radial-gradient(circle at 72% 82%, rgba(255, 190, 208, 0.16), transparent 32%),
+    radial-gradient(
+      circle at 14% 18%,
+      rgba(136, 204, 232, 0.24),
+      transparent 28%
+    ),
+    radial-gradient(
+      circle at 80% 14%,
+      rgba(255, 215, 148, 0.22),
+      transparent 30%
+    ),
+    radial-gradient(
+      circle at 72% 82%,
+      rgba(255, 190, 208, 0.16),
+      transparent 32%
+    ),
     #eef4f8;
 }
 
@@ -118,9 +133,21 @@ button {
 .mock-map {
   overflow: hidden;
   background:
-    radial-gradient(circle at 18% 20%, rgba(118, 198, 230, 0.32), transparent 30%),
-    radial-gradient(circle at 82% 18%, rgba(255, 217, 151, 0.3), transparent 32%),
-    radial-gradient(circle at 62% 82%, rgba(255, 192, 210, 0.22), transparent 34%),
+    radial-gradient(
+      circle at 18% 20%,
+      rgba(118, 198, 230, 0.32),
+      transparent 30%
+    ),
+    radial-gradient(
+      circle at 82% 18%,
+      rgba(255, 217, 151, 0.3),
+      transparent 32%
+    ),
+    radial-gradient(
+      circle at 62% 82%,
+      rgba(255, 192, 210, 0.22),
+      transparent 34%
+    ),
     linear-gradient(145deg, #eff8fb 0%, #dbeaf2 48%, #f7f3ea 100%);
 }
 
@@ -129,8 +156,16 @@ button {
   inset: -10%;
   content: "";
   background:
-    radial-gradient(circle at 28% 32%, rgba(255, 255, 255, 0.58), transparent 18%),
-    radial-gradient(circle at 72% 62%, rgba(255, 255, 255, 0.34), transparent 20%);
+    radial-gradient(
+      circle at 28% 32%,
+      rgba(255, 255, 255, 0.58),
+      transparent 18%
+    ),
+    radial-gradient(
+      circle at 72% 62%,
+      rgba(255, 255, 255, 0.34),
+      transparent 20%
+    );
   filter: blur(20px);
   opacity: 0.72;
 }
@@ -225,6 +260,127 @@ button {
   clip: rect(0 0 0 0) !important;
   clip-path: inset(50%) !important;
   white-space: nowrap !important;
+}
+
+.account-groups {
+  display: grid;
+  gap: 8px;
+}
+.restaurant-item h3 {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.restaurant-item h3 > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.item-group-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex: 0 0 6px;
+}
+.account-group-row,
+.account-group-row label,
+.group-create-entry {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.account-group-row label {
+  flex: 1;
+}
+.account-group-row label span {
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.account-group-row i,
+.group-label i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: 0 0 8px;
+}
+.account-group-row .auth-secondary-button {
+  width: auto;
+  flex: 0 0 auto;
+}
+.group-create-form {
+  display: grid;
+  gap: 10px;
+}
+.group-create-entry input,
+.invite-link {
+  min-width: 0;
+  width: 100%;
+  border: 1px solid var(--edge-soft);
+  border-radius: 8px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.18);
+  font: inherit;
+  color: inherit;
+}
+.group-create-entry button {
+  flex: 0 0 auto;
+  width: auto;
+}
+.group-colors {
+  display: flex;
+  gap: 12px;
+  padding: 4px;
+}
+.group-colors button {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  outline-offset: 3px;
+}
+.group-colors button[aria-pressed="true"] {
+  outline: 1px solid #535b62;
+}
+.group-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  font-size: 11px;
+  color: var(--muted);
+}
+.group-records {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+.group-records button {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+}
+.pin-groups {
+  position: absolute;
+  display: flex;
+  gap: 2px;
+  bottom: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 28px;
+  overflow: hidden;
+}
+.pin-groups i {
+  width: 5px;
+  height: 3px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+.auth-panel {
+  max-height: calc(100dvh - 110px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .topbar {
@@ -1618,7 +1774,8 @@ body.has-add-access .brand-add-button {
   width: 44px;
   height: 44px;
   place-items: center;
-  border: 1px solid color-mix(in srgb, var(--medal-color) 32%, rgba(17, 24, 32, 0.08));
+  border: 1px solid
+    color-mix(in srgb, var(--medal-color) 32%, rgba(17, 24, 32, 0.08));
   border-radius: 50%;
   color: #111820;
   background: var(--dock-surface);
@@ -1811,7 +1968,10 @@ body.has-add-access .brand-add-button {
 
 .tutorial-card[data-placement="bottom"] {
   top: auto;
-  bottom: calc(var(--dock-bottom) + env(safe-area-inset-bottom, 0px) + var(--dock-height) + 24px);
+  bottom: calc(
+    var(--dock-bottom) + env(safe-area-inset-bottom, 0px) + var(--dock-height) +
+      24px
+  );
 }
 
 .tutorial-header,
@@ -2357,7 +2517,10 @@ body.has-add-access .brand-add-button {
   display: grid;
   grid-template-columns: 52px minmax(0, 1fr) 52px;
   align-items: center;
-  padding: max(20px, env(safe-area-inset-top, 0px)) max(14px, env(safe-area-inset-right, 0px)) max(20px, env(safe-area-inset-bottom, 0px)) max(14px, env(safe-area-inset-left, 0px));
+  padding: max(20px, env(safe-area-inset-top, 0px))
+    max(14px, env(safe-area-inset-right, 0px))
+    max(20px, env(safe-area-inset-bottom, 0px))
+    max(14px, env(safe-area-inset-left, 0px));
   opacity: 0;
   pointer-events: none;
   visibility: hidden;
@@ -2387,7 +2550,10 @@ body.has-add-access .brand-add-button {
 .photo-viewer-figure img {
   display: block;
   max-width: 100%;
-  max-height: calc(100dvh - 96px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+  max-height: calc(
+    100dvh - 96px - env(safe-area-inset-top, 0px) -
+      env(safe-area-inset-bottom, 0px)
+  );
   border-radius: 12px;
   object-fit: contain;
 }

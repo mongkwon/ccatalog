@@ -1,54 +1,24 @@
 import {
-  STORAGE_KEY,
-  SUPABASE_TABLE,
   RESTAURANT_PHOTO_BUCKET,
-  seedRestaurants,
   normalizeRestaurant,
-  normalizeRestaurantPhotos,
   normalizeRestaurantPhoto,
   normalizeMenuItems,
   normalizeDeliveryApps,
   createId,
-  isUuid,
 } from "../lib/domain.js";
 
-class LocalRestaurantStore {
-  list() {
-    return loadLocalRestaurants();
-  }
+const columns =
+  "id,group_id,created_by,name,category,rating,area,lat,lng,menus,menu_items,delivery_apps,memo,created_at,updated_at";
+const photoColumns =
+  "id,restaurant_id,storage_path,alt_text,sort_order,created_at";
 
-  async save(restaurant) {
-    const nextRestaurant = normalizeRestaurant(restaurant);
-    const restaurants = loadLocalRestaurants();
-    const existingIndex = restaurants.findIndex(
-      (item) => item.id === nextRestaurant.id,
-    );
-    if (existingIndex >= 0) {
-      restaurants.splice(existingIndex, 1, nextRestaurant);
-    } else {
-      restaurants.unshift(nextRestaurant);
-    }
-    saveLocalRestaurants(restaurants);
-    return nextRestaurant;
-  }
-
-  async remove(id) {
-    saveLocalRestaurants(
-      loadLocalRestaurants().filter((restaurant) => restaurant.id !== id),
-    );
-  }
-}
-
-class SupabaseRestaurantStore {
+export class SupabaseRestaurantStore {
   constructor(config) {
     this.url = config.supabaseUrl;
     this.anonKey = config.supabaseAnonKey;
-    this.client = null;
-    this.userId = null;
     this.session = null;
-    this.authSubscription = null;
+    this.userId = null;
   }
-
   async init(onAuthChange) {
     const { createClient } = await import("@supabase/supabase-js");
     this.client = createClient(this.url, this.anonKey, {
@@ -59,254 +29,192 @@ class SupabaseRestaurantStore {
         storageKey: "ccatalog.supabase.auth",
       },
     });
-
-    const { data: sessionData, error: sessionError } =
-      await this.client.auth.getSession();
-    if (sessionError) throw sessionError;
-
-    this.setSession(sessionData.session);
-
-    const { data } = this.client.auth.onAuthStateChange((_event, session) => {
+    const { data, error } = await this.client.auth.getSession();
+    if (error) throw error;
+    this.setSession(data.session);
+    const result = this.client.auth.onAuthStateChange((event, session) => {
+      const changed = this.userId !== (session?.user?.id ?? null);
       this.setSession(session);
-      window.setTimeout(() => onAuthChange?.(session), 0);
+      if (changed || event === "SIGNED_OUT" || event === "USER_UPDATED")
+        window.setTimeout(() => onAuthChange?.(), 0);
     });
-    this.authSubscription = data.subscription;
+    this.authSubscription = result.data.subscription;
   }
-
   setSession(session) {
     this.session = session ?? null;
     this.userId = session?.user?.id ?? null;
   }
-
   async getMemberContext() {
-    const user = this.session?.user ?? null;
-    if (!user || user.is_anonymous) {
-      return {
-        user: null,
-        profile: null,
-        isAdmin: false,
-        visitedRestaurantIds: [],
-        visitCount: 0,
-        proposals: [],
-        adminProposals: [],
-      };
-    }
-
-    const [profileResult, adminResult, visitsResult, proposalsResult] =
-      await Promise.all([
-        this.client
-          .from("profiles")
-          .select("id,nickname,avatar_url,is_catalist,catalist_qualified_at")
-          .eq("id", user.id)
-          .maybeSingle(),
-        this.client
-          .from("admin_users")
-          .select("user_id")
-          .eq("user_id", user.id)
-          .maybeSingle(),
-        this.client
-          .from("restaurant_visits")
-          .select("restaurant_id")
-          .order("agreed_at", { ascending: true }),
-        this.client
-          .from("restaurant_proposals")
-          .select("id,name,status,created_at")
-          .eq("proposer_id", user.id)
-          .order("created_at", { ascending: false }),
-      ]);
-
-    if (profileResult.error) throw profileResult.error;
-    if (adminResult.error) throw adminResult.error;
-    if (visitsResult.error) throw visitsResult.error;
-    if (proposalsResult.error) throw proposalsResult.error;
-
-    const visitedRestaurantIds = (visitsResult.data ?? []).map(
-      (visit) => visit.restaurant_id,
-    );
-    let adminProposals = [];
-    if (adminResult.data) {
-      adminProposals = await this.listPendingRestaurantProposals();
-    }
-
-    return {
-      user,
-      profile: profileResult.data,
-      isAdmin: Boolean(adminResult.data),
-      visitedRestaurantIds,
-      visitCount: visitedRestaurantIds.length,
-      proposals: proposalsResult.data ?? [],
-      adminProposals,
-    };
+    const user = this.session?.user;
+    if (!user || user.is_anonymous)
+      return { user: null, profile: null, groups: [] };
+    const [profile, groups] = await Promise.all([
+      this.client
+        .from("profiles")
+        .select("id,nickname,avatar_url")
+        .eq("id", user.id)
+        .maybeSingle(),
+      this.listGroups(),
+    ]);
+    if (profile.error) throw profile.error;
+    return { user, profile: profile.data, groups };
   }
-
-  async signInWithKakao() {
-    const redirectTo = window.location.href.split(/[?#]/)[0];
-    const { error } = await this.client.auth.signInWithOAuth({
-      provider: "custom:kakao-test",
-      options: {
-        redirectTo,
-      },
-    });
-    if (error) throw error;
-  }
-
-  async signOut() {
-    const { error } = await this.client.auth.signOut({ scope: "local" });
-    if (error) throw error;
-  }
-
-  async confirmRestaurantVisit(restaurant, coords) {
-    const { data, error } = await this.client.rpc("confirm_restaurant_visit", {
-      p_restaurant_id: restaurant.id,
-      p_rating: restaurant.rating,
-      p_agrees: true,
-      p_lat: coords.lat,
-      p_lng: coords.lng,
-      p_accuracy: coords.accuracy,
-    });
-    if (error) throw error;
-    if (!data?.[0]) throw new Error("visit_result_missing");
-    return data[0];
-  }
-
-  async submitRestaurantProposal(restaurant, placeSelection) {
-    const { data, error } = await this.client.rpc(
-      "submit_restaurant_proposal",
-      {
-        p_name: restaurant.name,
-        p_category: restaurant.category,
-        p_suggested_rating: restaurant.rating,
-        p_area: restaurant.area,
-        p_lat: restaurant.lat,
-        p_lng: restaurant.lng,
-        p_menu_items: restaurant.menuItems,
-        p_delivery_apps: restaurant.deliveryApps,
-        p_memo: restaurant.memo,
-        p_source_link: placeSelection?.sourceLink || "",
-      },
-    );
-    if (error) throw error;
-    if (!data?.[0]) throw new Error("proposal_result_missing");
-    return data[0];
-  }
-
-  async listPendingRestaurantProposals() {
+  async listGroups() {
     const { data, error } = await this.client
-      .from("restaurant_proposals")
-      .select(
-        "id,status,name,category,suggested_rating,area,lat,lng,menu_items,delivery_apps,memo,source_link,created_at",
-      )
-      .eq("status", "pending")
-      .order("created_at", { ascending: true });
+      .from("catalog_groups")
+      .select("id,name,color,created_at")
+      .order("created_at");
     if (error) throw error;
     return data ?? [];
   }
-
-  async reviewRestaurantProposal(proposalId, decision) {
-    const { data, error } = await this.client.rpc(
-      "review_restaurant_proposal",
-      {
-        p_proposal_id: proposalId,
-        p_decision: decision,
-      },
-    );
-    if (error) throw error;
-    if (!data?.[0]) throw new Error("proposal_review_result_missing");
-    return data[0];
-  }
-
-  async list() {
-    const [restaurantResult, photoResult] = await Promise.all([
-      this.client
-        .from(SUPABASE_TABLE)
-        .select(RESTAURANT_SELECT_COLUMNS)
-        .order("rating", { ascending: false })
-        .order("name", { ascending: true }),
-      this.client
-        .from("restaurant_photos")
-        .select("id,restaurant_id,storage_path,alt_text,sort_order,created_at")
-        .order("restaurant_id", { ascending: true })
-        .order("sort_order", { ascending: true })
-        .order("created_at", { ascending: true }),
-    ]);
-
-    if (restaurantResult.error) throw restaurantResult.error;
-    if (photoResult.error) throw photoResult.error;
-
-    const photosByRestaurant = new Map();
-    (photoResult.data ?? []).forEach((row) => {
-      const photos = photosByRestaurant.get(row.restaurant_id) ?? [];
-      photos.push(
-        photoRowToPhoto(row, this.restaurantPhotoUrl(row.storage_path)),
-      );
-      photosByRestaurant.set(row.restaurant_id, photos);
+  async createGroup(name, color) {
+    const { data, error } = await this.client.rpc("create_catalog_group", {
+      p_name: name,
+      p_color: color,
     });
-
-    return (restaurantResult.data ?? [])
-      .map((row) => rowToRestaurant(row, photosByRestaurant.get(row.id) ?? []))
+    if (error) throw error;
+    return data;
+  }
+  async createInvite(groupId) {
+    const { data, error } = await this.client.rpc("create_catalog_invite", {
+      p_group_id: groupId,
+    });
+    if (error) throw error;
+    const url = new URL(location.href.split(/[?#]/)[0]);
+    url.searchParams.set("invite", data);
+    return url.href;
+  }
+  async joinGroup(token) {
+    const { data, error } = await this.client.rpc("join_catalog_group", {
+      p_token: token,
+    });
+    if (error) throw error;
+    return data;
+  }
+  async signInWithKakao() {
+    const { error } = await this.client.auth.signInWithOAuth({
+      provider: "custom:kakao-test",
+      options: { redirectTo: location.href.split(/[?#]/)[0] },
+    });
+    if (error) throw error;
+  }
+  async signOut() {
+    const { error } = await this.client.auth.signOut({ scope: "local" });
+    if (error) throw error;
+    this.setSession(null);
+  }
+  async signedPhotos(rows) {
+    if (!rows.length) return [];
+    const { data, error } = await this.client.storage
+      .from(RESTAURANT_PHOTO_BUCKET)
+      .createSignedUrls(
+        rows.map((row) => row.storage_path),
+        180,
+      );
+    if (error) throw error;
+    const urls = new Map(
+      (data ?? []).map((item) => [item.path, item.signedUrl]),
+    );
+    return rows
+      .map((row) =>
+        normalizeRestaurantPhoto({
+          id: row.id,
+          restaurantId: row.restaurant_id,
+          storagePath: row.storage_path,
+          altText: row.alt_text,
+          sortOrder: row.sort_order,
+          createdAt: row.created_at,
+          url: urls.get(row.storage_path),
+        }),
+      )
       .filter(Boolean);
   }
-
-  async save(restaurant, { isNew } = {}) {
-    const payload = restaurantToRow(restaurant, { includeId: isNew });
-    let query;
-
-    if (isNew) {
-      query = this.client.from(SUPABASE_TABLE).insert(payload);
-    } else {
-      query = this.client
-        .from(SUPABASE_TABLE)
-        .update(payload)
-        .eq("id", restaurant.id);
-    }
-
-    const { data, error } = await query
-      .select(RESTAURANT_SELECT_COLUMNS)
-      .single();
-    if (error) throw error;
-    return rowToRestaurant(data);
+  async list() {
+    if (!this.userId || this.session?.user?.is_anonymous) return [];
+    const [restaurants, photos] = await Promise.all([
+      this.client
+        .from("restaurants")
+        .select(columns)
+        .order("rating", { ascending: false })
+        .order("name"),
+      this.client
+        .from("restaurant_photos")
+        .select(photoColumns)
+        .order("sort_order")
+        .order("created_at"),
+    ]);
+    if (restaurants.error) throw restaurants.error;
+    if (photos.error) throw photos.error;
+    const signed = await this.signedPhotos(photos.data ?? []);
+    return (restaurants.data ?? [])
+      .map((row) =>
+        fromRow(
+          row,
+          signed.filter((photo) => photo.restaurantId === row.id),
+        ),
+      )
+      .filter(Boolean);
   }
-
+  async save(restaurant, { isNew } = {}) {
+    const menuItems = normalizeMenuItems(
+      restaurant.menuItems,
+      restaurant.menus,
+    );
+    const payload = {
+      name: restaurant.name,
+      category: restaurant.category,
+      area: restaurant.area,
+      lat: restaurant.lat,
+      lng: restaurant.lng,
+      menus: menuItems.map((item) => item.name),
+      menu_items: menuItems,
+      delivery_apps: normalizeDeliveryApps(restaurant.deliveryApps),
+      memo: restaurant.memo,
+    };
+    if (isNew)
+      Object.assign(payload, {
+        id: restaurant.id,
+        group_id: restaurant.groupId,
+        created_by: this.userId,
+        rating: restaurant.rating,
+      });
+    const query = isNew
+      ? this.client.from("restaurants").insert(payload)
+      : this.client.from("restaurants").update(payload).eq("id", restaurant.id);
+    const { data, error } = await query.select(columns).single();
+    if (error) throw error;
+    return fromRow(data);
+  }
   async remove(id) {
-    const { data: photos, error: photoQueryError } = await this.client
+    const { data, error } = await this.client
       .from("restaurant_photos")
       .select("storage_path")
       .eq("restaurant_id", id);
-    if (photoQueryError) throw photoQueryError;
-
-    const paths = (photos ?? []).map((photo) => photo.storage_path);
-    if (paths.length) {
-      const { error: storageError } = await this.client.storage
-        .from(RESTAURANT_PHOTO_BUCKET)
-        .remove(paths);
-      if (storageError) throw storageError;
-    }
-
-    const { error } = await this.client
-      .from(SUPABASE_TABLE)
-      .delete()
-      .eq("id", id);
     if (error) throw error;
+    if (data.length) {
+      const result = await this.client.storage
+        .from(RESTAURANT_PHOTO_BUCKET)
+        .remove(data.map((photo) => photo.storage_path));
+      if (result.error) throw result.error;
+    }
+    const result = await this.client
+      .from("restaurants")
+      .delete()
+      .eq("id", id)
+      .select("id")
+      .single();
+    if (result.error) throw result.error;
   }
-
-  restaurantPhotoUrl(storagePath) {
-    return this.client.storage
-      .from(RESTAURANT_PHOTO_BUCKET)
-      .getPublicUrl(storagePath).data.publicUrl;
-  }
-
   async addRestaurantPhoto(restaurant, blob, sortOrder) {
     if (!this.userId) throw new Error("not_authenticated");
     const storagePath = `${restaurant.id}/${createId()}.jpg`;
-    const { error: uploadError } = await this.client.storage
-      .from(RESTAURANT_PHOTO_BUCKET)
-      .upload(storagePath, blob, {
-        cacheControl: "31536000",
-        contentType: "image/jpeg",
-        upsert: false,
-      });
-    if (uploadError) throw uploadError;
-
+    const bucket = this.client.storage.from(RESTAURANT_PHOTO_BUCKET);
+    const upload = await bucket.upload(storagePath, blob, {
+      cacheControl: "180",
+      contentType: "image/jpeg",
+      upsert: false,
+    });
+    if (upload.error) throw upload.error;
     const { data, error } = await this.client
       .from("restaurant_photos")
       .insert({
@@ -316,32 +224,27 @@ class SupabaseRestaurantStore {
         sort_order: sortOrder,
         created_by: this.userId,
       })
-      .select("id,restaurant_id,storage_path,alt_text,sort_order,created_at")
+      .select(photoColumns)
       .single();
-
     if (error) {
-      await this.client.storage
-        .from(RESTAURANT_PHOTO_BUCKET)
-        .remove([storagePath]);
+      await bucket.remove([storagePath]);
       throw error;
     }
-
-    return photoRowToPhoto(data, this.restaurantPhotoUrl(storagePath));
+    return (await this.signedPhotos([data]))[0];
   }
-
   async removeRestaurantPhoto(photo) {
-    const { error: storageError } = await this.client.storage
+    const storage = await this.client.storage
       .from(RESTAURANT_PHOTO_BUCKET)
       .remove([photo.storagePath]);
-    if (storageError) throw storageError;
-
-    const { error: rowError } = await this.client
+    if (storage.error) throw storage.error;
+    const row = await this.client
       .from("restaurant_photos")
       .delete()
-      .eq("id", photo.id);
-    if (rowError) throw rowError;
+      .eq("id", photo.id)
+      .select("id")
+      .single();
+    if (row.error) throw row.error;
   }
-
   async updateRestaurantPhotoOrder(photos) {
     const results = await Promise.all(
       photos.map((photo, index) =>
@@ -351,115 +254,18 @@ class SupabaseRestaurantStore {
           .eq("id", photo.id),
       ),
     );
-    const failedResult = results.find((result) => result.error);
-    if (failedResult?.error) throw failedResult.error;
+    const failed = results.find((result) => result.error);
+    if (failed) throw failed.error;
   }
 }
 
-const RESTAURANT_SELECT_COLUMNS = [
-  "id",
-  "name",
-  "category",
-  "rating",
-  "area",
-  "lat",
-  "lng",
-  "menus",
-  "menu_items",
-  "delivery_apps",
-  "memo",
-  "created_at",
-  "updated_at",
-].join(",");
-
-function rowToRestaurant(row, photos = []) {
+function fromRow(row, photos = []) {
   return normalizeRestaurant({
-    id: row.id,
-    name: row.name,
-    category: row.category,
-    rating: row.rating,
-    area: row.area,
-    lat: row.lat,
-    lng: row.lng,
-    menus: row.menus,
+    ...row,
+    groupId: row.group_id,
+    createdBy: row.created_by,
     menuItems: row.menu_items,
     deliveryApps: row.delivery_apps,
-    memo: row.memo,
     photos,
   });
 }
-
-function photoRowToPhoto(row, url) {
-  return normalizeRestaurantPhoto({
-    id: row.id,
-    restaurantId: row.restaurant_id,
-    storagePath: row.storage_path,
-    altText: row.alt_text,
-    sortOrder: row.sort_order,
-    createdAt: row.created_at,
-    url,
-  });
-}
-
-function restaurantToRow(restaurant, { includeId = true } = {}) {
-  const menuItems = normalizeMenuItems(restaurant.menuItems, restaurant.menus);
-  const row = {
-    name: restaurant.name,
-    category: restaurant.category,
-    rating: restaurant.rating,
-    area: restaurant.area,
-    lat: restaurant.lat,
-    lng: restaurant.lng,
-    menus: menuItems.map((item) => item.name),
-    menu_items: menuItems,
-    delivery_apps: normalizeDeliveryApps(restaurant.deliveryApps),
-    memo: restaurant.memo,
-  };
-
-  if (includeId && isUuid(restaurant.id)) {
-    row.id = restaurant.id;
-  }
-
-  return row;
-}
-
-function hasLocalRestaurantData() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return false;
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) && parsed.length > 0;
-  } catch {
-    return false;
-  }
-}
-
-function loadLocalRestaurants() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw)
-      return structuredClone(seedRestaurants)
-        .map(normalizeRestaurant)
-        .filter(Boolean);
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed))
-      return structuredClone(seedRestaurants)
-        .map(normalizeRestaurant)
-        .filter(Boolean);
-    return parsed.map(normalizeRestaurant).filter(Boolean);
-  } catch {
-    return structuredClone(seedRestaurants)
-      .map(normalizeRestaurant)
-      .filter(Boolean);
-  }
-}
-
-function saveLocalRestaurants(restaurants) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(restaurants));
-}
-
-export {
-  LocalRestaurantStore,
-  SupabaseRestaurantStore,
-  hasLocalRestaurantData,
-};

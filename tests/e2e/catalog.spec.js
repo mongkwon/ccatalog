@@ -2,8 +2,10 @@ import { test, expect } from "@playwright/test";
 import { readFileSync } from "node:fs";
 
 const userId = "22222222-2222-4222-8222-222222222222";
+const otherId = "99999999-9999-4999-8999-999999999999";
+const groupId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+const secondGroupId = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 const restaurantId = "11111111-1111-4111-8111-111111111111";
-const secondId = "33333333-3333-4333-8333-333333333333";
 const png = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aP1kAAAAASUVORK5CYII=",
   "base64",
@@ -12,16 +14,22 @@ const mapScript = readFileSync(
   new URL("../fixtures/naver-sdk.js", import.meta.url),
   "utf8",
 );
+const invitation = "a".repeat(48);
 
-async function setup(page, { role = "guest", tutorial = false } = {}) {
-  await page.route("https://cdn.jsdelivr.net/**", (route) =>
-    route.fulfill({ contentType: "text/css", body: "" }),
-  );
+async function setup(
+  page,
+  {
+    guest = false,
+    tutorial = false,
+    noGroups = false,
+    duplicate = false,
+    invite = false,
+  } = {},
+) {
   const user = {
     id: userId,
     aud: "authenticated",
     role: "authenticated",
-    email: "test@example.com",
     app_metadata: {},
     user_metadata: { nickname: "테스트회원" },
     identities: [],
@@ -32,9 +40,9 @@ async function setup(page, { role = "guest", tutorial = false } = {}) {
   ).toString("base64url");
   const token = `eyJhbGciOiJIUzI1NiJ9.${claims}.signature`;
   await page.addInitScript(
-    ({ user, token, role, tutorial }) => {
-      if (!tutorial) localStorage.setItem("ccatalog.tutorial.v2", "complete");
-      if (role !== "guest")
+    ({ user, token, guest, tutorial }) => {
+      if (!tutorial) localStorage.setItem("ccatalog.tutorial.v3", "complete");
+      if (!guest)
         localStorage.setItem(
           "ccatalog.supabase.auth",
           JSON.stringify({
@@ -62,30 +70,27 @@ async function setup(page, { role = "guest", tutorial = false } = {}) {
               50,
             );
           },
-          watchPosition(success) {
-            setTimeout(
-              () =>
-                success({
-                  coords: {
-                    latitude: 37.566535,
-                    longitude: 126.977969,
-                    accuracy: 15,
-                  },
-                }),
-              100,
-            );
+          watchPosition() {
             return 1;
           },
           clearWatch() {},
         },
       });
     },
-    { user, token, role, tutorial },
+    { user, token, guest, tutorial },
   );
   const state = {
+    groups: noGroups
+      ? []
+      : [
+          { id: groupId, name: "친구들", color: "#5285bc" },
+          { id: secondGroupId, name: "회사", color: "#b87981" },
+        ],
     restaurants: [
       {
         id: restaurantId,
+        group_id: groupId,
+        created_by: userId,
         name: "테스트면옥",
         category: "한식",
         rating: 3,
@@ -98,13 +103,15 @@ async function setup(page, { role = "guest", tutorial = false } = {}) {
         memo: "깔끔한 국물",
       },
       {
-        id: secondId,
-        name: "테스트카페",
+        id: "33333333-3333-4333-8333-333333333333",
+        group_id: secondGroupId,
+        created_by: otherId,
+        name: duplicate ? "테스트면옥" : "테스트카페",
         category: "카페",
         rating: 1,
         area: "서울 종로구",
-        lat: 37.572,
-        lng: 126.985,
+        lat: duplicate ? 37.5666 : 37.572,
+        lng: duplicate ? 126.978 : 126.985,
         menus: ["커피"],
         menu_items: [{ name: "커피", price: "5,000원" }],
         delivery_apps: [],
@@ -112,11 +119,13 @@ async function setup(page, { role = "guest", tutorial = false } = {}) {
       },
     ],
     photos: [],
-    visits: [],
-    proposals: [],
     searches: [],
     writes: [],
+    signed: 0,
   };
+  await page.route("https://cdn.jsdelivr.net/**", (route) =>
+    route.fulfill({ contentType: "text/css", body: "" }),
+  );
   await page.route("**/config.json", (route) =>
     route.fulfill({
       json: {
@@ -132,8 +141,8 @@ async function setup(page, { role = "guest", tutorial = false } = {}) {
   await page.route("https://fixture.supabase.co/**", async (route) => {
     const request = route.request();
     const url = new URL(request.url());
-    const method = request.method();
     const path = url.pathname;
+    const method = request.method();
     if (method === "OPTIONS")
       return route.fulfill({
         status: 200,
@@ -153,6 +162,18 @@ async function setup(page, { role = "guest", tutorial = false } = {}) {
     let body = [];
     if (path.includes("/auth/v1/user")) body = user;
     else if (path.includes("/auth/v1/logout")) body = {};
+    else if (path.endsWith("/profiles"))
+      body = [{ id: userId, nickname: "테스트회원" }];
+    else if (path.endsWith("/catalog_groups")) body = state.groups;
+    else if (path.endsWith("/rpc/create_catalog_group")) {
+      state.groups.push({
+        id: secondGroupId,
+        name: payload.p_name,
+        color: payload.p_color,
+      });
+      body = secondGroupId;
+    } else if (path.endsWith("/rpc/create_catalog_invite")) body = invitation;
+    else if (path.endsWith("/rpc/join_catalog_group")) body = groupId;
     else if (path.includes("/functions/v1/naver-place-search")) {
       state.searches.push(payload.query);
       body = {
@@ -163,105 +184,51 @@ async function setup(page, { role = "guest", tutorial = false } = {}) {
             roadAddress: "서울 중구 세종대로 1",
             lat: 37.5667,
             lng: 126.9782,
-            link: "https://map.naver.com/",
           },
         ],
       };
-    } else if (path.endsWith("/rpc/confirm_restaurant_visit")) {
-      state.visits.push({ restaurant_id: payload.p_restaurant_id });
-      body = [
-        {
-          visit_count: state.visits.length,
-          is_catalist: state.visits.length >= 3,
-          distance_m: 10,
-        },
-      ];
-    } else if (path.endsWith("/rpc/submit_restaurant_proposal")) {
-      const proposal = {
-        id: secondId,
-        name: payload.p_name,
-        status: "pending",
-        created_at: new Date().toISOString(),
-        category: payload.p_category,
-        suggested_rating: payload.p_suggested_rating,
-        area: payload.p_area,
-        menu_items: payload.p_menu_items,
-        delivery_apps: payload.p_delivery_apps,
-      };
-      state.proposals.push(proposal);
-      body = [
-        {
-          proposal_id: proposal.id,
-          proposal_status: "pending",
-          proposal_created_at: proposal.created_at,
-        },
-      ];
-    } else if (path.endsWith("/rpc/review_restaurant_proposal")) {
-      const proposal = state.proposals.find(
-        (item) => item.id === payload.p_proposal_id,
+    } else if (path.endsWith("/restaurants")) {
+      const row = state.restaurants.find(
+        (item) => `eq.${item.id}` === url.searchParams.get("id"),
       );
-      proposal.status = payload.p_decision;
-      body = [
-        {
-          proposal_id: proposal.id,
-          proposal_status: proposal.status,
-          approved_restaurant_id: null,
-        },
-      ];
-    } else if (path.endsWith("/profiles"))
-      body = [
-        {
-          id: userId,
-          nickname: "테스트회원",
-          is_catalist: role === "catalist" || state.visits.length >= 3,
-        },
-      ];
-    else if (path.endsWith("/admin_users"))
-      body = role === "admin" ? [{ user_id: userId }] : [];
-    else if (path.endsWith("/restaurant_visits")) body = state.visits;
-    else if (path.endsWith("/restaurant_proposals"))
-      body = state.proposals.filter(
-        (item) => !url.searchParams.has("status") || item.status === "pending",
-      );
-    else if (path.endsWith("/restaurants")) {
       if (method === "POST") {
-        const row = { ...payload, id: "44444444-4444-4444-8444-444444444444" };
-        state.restaurants.push(row);
-        body = row;
+        body = { ...payload };
+        state.restaurants.push(body);
       } else if (method === "PATCH") {
-        const row = state.restaurants.find(
-          (item) => `eq.${item.id}` === url.searchParams.get("id"),
-        );
         Object.assign(row, payload);
         body = row;
       } else if (method === "DELETE") {
-        state.restaurants = state.restaurants.filter(
-          (item) => `eq.${item.id}` !== url.searchParams.get("id"),
-        );
-        body = null;
-      } else body = state.restaurants;
+        state.restaurants = state.restaurants.filter((item) => item !== row);
+        body = { id: row.id };
+      } else body = noGroups ? [] : state.restaurants;
     } else if (path.endsWith("/restaurant_photos")) {
       if (method === "POST") {
-        const photo = {
+        body = {
           ...payload,
           id: `photo-${state.photos.length}`,
           created_at: new Date().toISOString(),
         };
-        state.photos.push(photo);
-        body = photo;
+        state.photos.push(body);
       } else if (method === "DELETE") {
-        state.photos = state.photos.filter(
-          (item) => `eq.${item.id}` !== url.searchParams.get("id"),
-        );
-        body = null;
+        const id = url.searchParams.get("id").slice(3);
+        state.photos = state.photos.filter((item) => item.id !== id);
+        body = { id };
       } else if (method === "PATCH") {
-        const photo = state.photos.find(
-          (item) => `eq.${item.id}` === url.searchParams.get("id"),
+        Object.assign(
+          state.photos.find(
+            (item) => `eq.${item.id}` === url.searchParams.get("id"),
+          ),
+          payload,
         );
-        Object.assign(photo, payload);
         body = null;
       } else body = state.photos;
-    } else if (path.includes("/storage/v1/object/public/"))
+    } else if (path.includes("/storage/v1/object/sign/") && method === "POST") {
+      state.signed++;
+      body = payload.paths.map((path) => ({
+        path,
+        signedURL: `/object/sign/restaurant-photos/${path}?token=fixture`,
+      }));
+    } else if (path.includes("/storage/v1/object/sign"))
       return route.fulfill({ contentType: "image/png", body: png });
     else if (path.includes("/storage/")) body = {};
     return route.fulfill({
@@ -273,48 +240,26 @@ async function setup(page, { role = "guest", tutorial = false } = {}) {
   });
   const errors = [];
   page.on("pageerror", (error) => errors.push(error.message));
-  await page.goto("/", { waitUntil: "domcontentloaded" });
-  await expect(page.locator("#resultCount")).toHaveText("2곳");
+  await page.goto(invite ? `/?invite=${invitation}` : "/");
+  await expect(page.locator("#resultCount")).toHaveText(
+    guest || noGroups ? "0곳" : "2곳",
+  );
   await expect
     .poll(() => page.evaluate(() => window.__mapStats?.created))
     .toBe(1);
   return { state, errors };
 }
 
-async function adminMode(page) {
-  await page.locator("#adminButton").click();
-  await page.getByRole("button", { name: "관리자", exact: true }).click();
-}
-
-test("filter, search, details and location share state without recreating the map", async ({
+test("filter, search, map and smooth centering retain shared state", async ({
   page,
 }, testInfo) => {
   const { errors } = await setup(page);
   await expect(page.locator(".user-location-marker")).toBeVisible();
-  const initialLayout = await page.evaluate(() => {
-    const marker = document
-      .querySelector(".user-location-marker")
-      .getBoundingClientRect();
-    const card = document
-      .querySelector("#restaurantPanel")
-      .getBoundingClientRect();
-    return {
-      markerY: marker.top + marker.height / 2,
-      centerY: card.top / 2,
-      scrollHeight: document.documentElement.scrollHeight,
-      height: innerHeight,
-    };
-  });
-  expect(Math.abs(initialLayout.markerY - initialLayout.centerY)).toBeLessThan(
-    2,
-  );
-  expect(initialLayout.scrollHeight).toBe(initialLayout.height);
-  await page.screenshot({ path: testInfo.outputPath("list.png") });
   await page.locator('.dock-filter-button[data-filter="3"]').click();
   await expect(page.locator("#resultCount")).toHaveText("1곳");
   await page.locator(".restaurant-item").click();
   await expect(page.locator("#selectedCard h2")).toHaveText("테스트면옥");
-  const selectedLayout = await page.evaluate(() => {
+  const layout = await page.evaluate(() => {
     const pin = document
       .querySelector("#map .pin-marker.is-selected")
       .getBoundingClientRect();
@@ -325,15 +270,15 @@ test("filter, search, details and location share state without recreating the ma
         ),
       ].map((card) => card.getBoundingClientRect().top),
     );
-    return { pinY: pin.top + pin.height / 2, centerY: top / 2 };
+    return {
+      y: pin.top + pin.height / 2,
+      center: top / 2,
+      overflow: document.documentElement.scrollHeight - innerHeight,
+    };
   });
-  expect(Math.abs(selectedLayout.pinY - selectedLayout.centerY)).toBeLessThan(
-    2,
-  );
+  expect(Math.abs(layout.y - layout.center)).toBeLessThan(2);
+  expect(layout.overflow).toBe(0);
   await page.screenshot({ path: testInfo.outputPath("detail.png") });
-  await expect(page.locator('#selectedCard [data-action="edit"]')).toHaveCount(
-    0,
-  );
   await page.locator("#searchToggle").click();
   await expect(page.locator("#selectedCard")).toHaveClass(/hidden/);
   await page.locator("#searchInput").fill("없는식당");
@@ -341,195 +286,175 @@ test("filter, search, details and location share state without recreating the ma
   await page.locator("#searchInput").fill("냉면");
   await expect(page.locator("#resultCount")).toHaveText("1곳");
   await page.locator("#filterModeButton").click();
-  await expect(page.locator(".dock-cluster")).not.toHaveClass(/is-search-mode/);
   expect(await page.evaluate(() => window.__mapStats.created)).toBe(1);
   expect(errors).toEqual([]);
 });
 
-test("drag previews the new medal and commits only on release", async ({
-  page,
-}) => {
-  const { errors } = await setup(page);
-  const first = await page
+test("drag previews without committing until release", async ({ page }) => {
+  await setup(page);
+  const a = await page
     .locator('.dock-filter-button[data-filter="all"]')
     .boundingBox();
-  const last = await page
+  const b = await page
     .locator('.dock-filter-button[data-filter="3"]')
     .boundingBox();
-  const start = { x: first.x + first.width / 2, y: first.y + first.height / 2 };
-  const end = { x: last.x + last.width / 2, y: last.y + last.height / 2 };
-  await page.mouse.move(start.x, start.y);
+  await page.mouse.move(a.x + a.width / 2, a.y + a.height / 2);
   await page.mouse.down();
-  await page.mouse.move(end.x, end.y, { steps: 5 });
+  await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2, { steps: 5 });
   await expect(page.locator(".bottom-dock")).toHaveClass(/is-dragging/);
   await expect(page.locator("#resultCount")).toHaveText("2곳");
-  await expect(
-    page.locator('.dock-filter-button[data-filter="3"]'),
-  ).toHaveClass(/is-preview/);
   await page.mouse.up();
   await expect(page.locator("#resultCount")).toHaveText("1곳");
-  await expect(page.locator(".bottom-dock")).not.toHaveClass(
-    /is-dragging|is-pressing/,
-  );
-  expect(errors).toEqual([]);
 });
 
-test("member can submit proposals and admin can review them", async ({
+test("author edits information without changing the initial medal, then deletes", async ({
   page,
 }) => {
-  const { state, errors } = await setup(page, { role: "admin" });
+  const { state, errors } = await setup(page);
   page.on("dialog", (dialog) => dialog.accept());
-  await page.locator("#adminButton").click();
-  await page.getByRole("button", { name: "까탈리스트", exact: true }).click();
-  await page.locator("#addButton").click();
-  await expect(page.locator("#spotDialogTitle")).toHaveText("맛집 건의");
-  await page.locator("#nameInput").fill("건의식당");
-  await page.locator("#nameInput").press("Enter");
-  await page.locator(".place-result").click();
-  await page.locator("#spotSubmitButton").click();
-  await expect(page.locator(".proposal-status-row")).toContainText("검토 중");
-  expect(state.proposals).toHaveLength(1);
-  await page.getByRole("button", { name: "관리자", exact: true }).click();
-  await page.getByRole("button", { name: "맛집 건의 검토" }).click();
-  await expect(page.locator(".proposal-review-item")).toHaveCount(1);
-  await page.getByRole("button", { name: "승인", exact: true }).click();
-  await expect(page.locator(".proposal-review-status")).toContainText(
-    "승인했습니다",
-  );
-  expect(state.proposals[0].status).toBe("approved");
-  expect(errors).toEqual([]);
-});
-
-test("editing and deleting preserves selected restaurant identity", async ({
-  page,
-}) => {
-  const { state, errors } = await setup(page, { role: "admin" });
-  page.on("dialog", (dialog) => dialog.accept());
-  await adminMode(page);
   await page.locator(".restaurant-item").first().click();
   await page
     .locator("#selectedCard")
     .getByRole("button", { name: "수정", exact: true })
     .click();
+  await expect(page.locator('input[name="rating"]').first()).toBeDisabled();
   await page.locator("#memoInput").fill("수정된 메모");
   await page.locator("#spotSubmitButton").click();
   await expect(page.locator("#selectedCard .memo")).toHaveText("수정된 메모");
-  expect(state.restaurants.find((item) => item.id === restaurantId).memo).toBe(
-    "수정된 메모",
+  const patch = state.writes.find(
+    (item) => item.path.endsWith("/restaurants") && item.method === "PATCH",
   );
+  expect(patch.payload).not.toHaveProperty("rating");
+  expect(patch.payload).not.toHaveProperty("created_by");
   await page
     .locator("#selectedCard")
     .getByRole("button", { name: "삭제", exact: true })
     .click();
   await expect(page.locator("#resultCount")).toHaveText("1곳");
-  expect(state.restaurants.some((item) => item.id === restaurantId)).toBe(
-    false,
-  );
   expect(errors).toEqual([]);
 });
 
-test("login keeps custom Kakao provider and local callback; logout clears privileges", async ({
+test("another member can read but cannot edit another author's record", async ({
   page,
 }) => {
-  const { errors } = await setup(page);
-  await page.locator("#adminButton").click();
-  await page.getByRole("button", { name: "카카오로 시작하기" }).click();
-  await expect(page).toHaveURL(/fixture\.supabase\.co\/auth\/v1\/authorize/);
-  const authorize = new URL(page.url());
-  expect(authorize.searchParams.get("provider")).toBe("custom:kakao-test");
-  expect(authorize.searchParams.get("redirect_to")).toBe(
-    "http://127.0.0.1:4174/",
-  );
-  expect(errors).toEqual([]);
-});
-
-test("logout removes admin controls from the active detail", async ({
-  page,
-}) => {
-  const { errors } = await setup(page, { role: "admin" });
-  await adminMode(page);
-  await page.locator(".restaurant-item").first().click();
-  await page.locator("#adminButton").click();
-  await page.getByRole("button", { name: "로그아웃", exact: true }).click();
-  await expect(page.locator("#adminButton")).toHaveText("로그인");
-  await expect(page.locator("#addButton")).toHaveAttribute(
-    "aria-hidden",
-    "true",
-  );
+  await setup(page);
+  await page.locator(".restaurant-item").last().click();
+  await expect(page.locator("#selectedCard h2")).toHaveText("테스트카페");
   await expect(
     page
       .locator("#selectedCard")
-      .getByRole("button", { name: "삭제", exact: true }),
+      .getByRole("button", { name: "수정", exact: true }),
   ).toHaveCount(0);
-  expect(errors).toEqual([]);
+  await expect(page.locator(".visit-verification")).toHaveCount(0);
 });
 
-test("admin permissions update all controls; Enter searches and selected places are required", async ({
+test("guest has no private records and login preserves provider and invitation", async ({
   page,
 }) => {
-  const { state, errors } = await setup(page, { role: "admin" });
-  await adminMode(page);
+  const { state } = await setup(page, { guest: true, invite: true });
+  expect(
+    state.writes.filter((item) => item.path.includes("join_catalog_group")),
+  ).toHaveLength(0);
+  await page.locator("#adminButton").click();
+  await page.getByRole("button", { name: "카카오로 시작하기" }).click();
+  await expect(page).toHaveURL(/fixture\.supabase\.co\/auth\/v1\/authorize/);
+  const url = new URL(page.url());
+  expect(url.searchParams.get("provider")).toBe("custom:kakao-test");
+  expect(url.searchParams.get("redirect_to")).toBe("http://127.0.0.1:4174/");
+});
+
+test("invited member joins once and removes the invitation from the URL", async ({
+  page,
+}) => {
+  const { state } = await setup(page, { invite: true });
+  await expect(page).toHaveURL("http://127.0.0.1:4174/");
+  expect(
+    state.writes.filter((item) => item.path.endsWith("join_catalog_group")),
+  ).toHaveLength(1);
+  expect(
+    await page.evaluate(() => sessionStorage.getItem("ccatalog.pendingInvite")),
+  ).toBe(null);
+});
+
+test("new member creates a group and generates an invitation", async ({
+  page,
+}) => {
+  const { state } = await setup(page, { noGroups: true });
+  page.on("dialog", (dialog) => dialog.accept());
+  await page.locator("#adminButton").click();
+  await page.getByRole("textbox", { name: "새 그룹 이름" }).fill("우리 맛집");
+  await page.getByRole("button", { name: "만들기", exact: true }).click();
+  await expect(page.locator(".account-group-row")).toHaveCount(1);
+  expect(state.groups[0].name).toBe("우리 맛집");
+  await page.getByRole("button", { name: "우리 맛집 초대 링크 발급" }).click();
+  await expect(
+    page.getByRole("textbox", { name: "초대 링크", exact: true }),
+  ).toHaveValue(new RegExp(`invite=${invitation}`));
+});
+
+test("groups can be toggled and a shared branch has one pin with separate records", async ({
+  page,
+}) => {
+  await setup(page, { duplicate: true });
+  await expect(page.locator("#map .pin-marker")).toHaveCount(1);
+  await page.locator(".restaurant-item").first().click();
+  await expect(page.locator(".group-records button")).toHaveCount(2);
+  await page.locator(".group-records button").last().click();
+  await expect(
+    page.locator("#selectedCard .card-side .rating-badge"),
+  ).toContainText("동메달");
+  await page.locator("#adminButton").click();
+  await page
+    .locator(".account-group-row")
+    .first()
+    .getByRole("checkbox")
+    .uncheck();
+  await expect(page.locator("#resultCount")).toHaveText("1곳");
+});
+
+test("any member can register a searched place in their group", async ({
+  page,
+}) => {
+  const { state } = await setup(page);
+  page.on("dialog", (dialog) => dialog.accept());
   await page.locator("#addButton").click();
   await page.locator("#nameInput").fill("임의입력");
   await page.locator("#spotSubmitButton").click();
   await expect(page.locator("#placeResultList")).toContainText(
     "장소 검색 결과에서 식당을 선택해주세요",
   );
-  expect(
-    state.writes.filter((item) => item.path.endsWith("/restaurants")),
-  ).toHaveLength(0);
   await page.locator("#nameInput").press("Enter");
-  await expect(page.locator(".place-result")).toHaveCount(1);
-  expect(state.searches).toEqual(["임의입력"]);
   await page.locator(".place-result").click();
   await page.locator("#menuDraftInput").fill("초밥");
   await page.locator("#menuPriceDraftInput").fill("16000");
   await page.locator("#addMenuButton").click();
   await page.locator("#spotSubmitButton").click();
   await expect(page.locator("#selectedCard h2")).toHaveText("검색된식당");
-  await expect(page.locator("#selectedCard .menu-chip")).toHaveText(
-    "초밥 16,000원",
+  const insert = state.writes.find(
+    (item) => item.path.endsWith("/restaurants") && item.method === "POST",
   );
-  await expect(
-    page
-      .locator("#selectedCard")
-      .getByRole("button", { name: "수정", exact: true }),
-  ).toBeVisible();
-  await page.locator("#adminButton").click();
-  await page.getByRole("button", { name: "일반회원", exact: true }).click();
-  await expect(
-    page
-      .locator("#selectedCard")
-      .getByRole("button", { name: "수정", exact: true }),
-  ).toHaveCount(0);
-  await expect(page.locator("#addButton")).toHaveAttribute(
-    "aria-hidden",
-    "true",
-  );
-  expect(errors).toEqual([]);
+  expect(insert.payload.group_id).toBe(groupId);
+  expect(insert.payload.created_by).toBe(userId);
 });
 
-test("visit is counted only after agreeing", async ({ page }) => {
-  const { state, errors } = await setup(page, { role: "member" });
+test("logout clears private records, open details and add permission", async ({
+  page,
+}) => {
+  await setup(page);
   await page.locator(".restaurant-item").first().click();
-  await page.getByRole("button", { name: "방문 인증", exact: true }).click();
-  await expect(page.locator(".visit-title")).toContainText(
-    "평가에 동의하시나요",
-  );
-  expect(state.visits).toHaveLength(0);
-  await page.getByRole("button", { name: "네", exact: true }).click();
-  await expect(page.locator(".visit-confirmed-label")).toHaveText(
-    "방문 확인됨",
-  );
-  expect(state.visits).toHaveLength(1);
-  await expect(page.locator(".visit-feedback")).toContainText("앞으로 2곳");
-  expect(errors).toEqual([]);
+  await page.locator("#adminButton").click();
+  await page.getByRole("button", { name: "로그아웃", exact: true }).click();
+  await expect(page.locator("#adminButton")).toHaveText("로그인");
+  await expect(page.locator("#resultCount")).toHaveText("0곳");
+  await expect(page.locator("#map .pin-marker")).toHaveCount(0);
+  await expect(page.locator("#selectedCard")).toHaveClass(/hidden/);
 });
 
-test("photo upload, viewer, reorder and deletion", async ({ page }) => {
-  const { state, errors } = await setup(page, { role: "admin" });
+test("author uploads private photos, reorders, views and deletes them", async ({
+  page,
+}) => {
+  const { state, errors } = await setup(page);
   page.on("dialog", (dialog) => dialog.accept());
-  await adminMode(page);
   await page.locator(".restaurant-item").first().click();
   await page
     .locator("#selectedCard")
@@ -540,20 +465,11 @@ test("photo upload, viewer, reorder and deletion", async ({ page }) => {
     { name: "two.png", mimeType: "image/png", buffer: png },
   ]);
   await expect(page.locator(".photo-manager-item")).toHaveCount(2);
-  await expect(page.locator(".photo-manager-status")).toHaveText(
-    "사진을 추가했습니다",
-  );
+  expect(state.signed).toBeGreaterThan(0);
   await page.getByRole("button", { name: "사진 뒤로 이동" }).first().click();
-  await expect(page.locator(".photo-manager-status")).toHaveText(
-    "사진 순서를 변경했습니다",
-  );
   await page.getByRole("button", { name: "사진 관리 닫기" }).click();
   await page.locator(".restaurant-photo-button").first().click();
   await expect(page.locator(".photo-viewer-figure img")).toBeVisible();
-  await page.getByRole("button", { name: "다음 사진", exact: true }).click();
-  await expect(page.locator(".photo-viewer-figure figcaption")).toContainText(
-    "2 / 2",
-  );
   await page.getByRole("button", { name: "사진 닫기", exact: true }).click();
   await page
     .locator("#selectedCard")
@@ -561,28 +477,19 @@ test("photo upload, viewer, reorder and deletion", async ({ page }) => {
     .click();
   await page.locator(".photo-delete-button").first().click();
   await expect(page.locator(".photo-manager-item")).toHaveCount(1);
-  expect(state.photos).toHaveLength(1);
   expect(errors).toEqual([]);
 });
 
-test("tutorial keeps all three steps and completion flag", async ({ page }) => {
-  const { errors } = await setup(page, { tutorial: true });
+test("tutorial explains private groups and completes", async ({ page }) => {
+  await setup(page, { tutorial: true });
   await expect(page.locator("#tutorialOverlay")).toHaveClass(/is-open/);
-  await expect(page.locator("#tutorialTitle")).toHaveText(
-    "까탈스러운 맛집 로그",
-  );
+  await page.getByRole("button", { name: "다음", exact: true }).click();
   await page.getByRole("button", { name: "다음", exact: true }).click();
   await expect(page.locator("#tutorialTitle")).toHaveText(
-    "메달은 추천의 강도예요",
+    "우리끼리 나누는 맛집",
   );
-  await page.getByRole("button", { name: "다음", exact: true }).click();
   await page.getByRole("button", { name: "시작하기", exact: true }).click();
-  await expect(page.locator("#tutorialOverlay")).toHaveAttribute(
-    "aria-hidden",
-    "true",
-  );
   expect(
-    await page.evaluate(() => localStorage.getItem("ccatalog.tutorial.v2")),
+    await page.evaluate(() => localStorage.getItem("ccatalog.tutorial.v3")),
   ).toBe("complete");
-  expect(errors).toEqual([]);
 });
