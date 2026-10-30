@@ -901,6 +901,16 @@ test("filter, search, map and smooth centering retain shared state", async ({
   await page.locator("#searchInput").fill("냉면");
   await expect(page.locator("#resultCount")).toHaveText("1곳");
   await page.locator("#filterModeButton").click();
+  await expect(page.locator("#searchInput")).toHaveValue("");
+  await expect(page.locator("#resultCount")).toHaveText("1곳");
+  await page.locator('.dock-filter-button[data-filter="all"]').click();
+  await expect(page.locator("#resultCount")).toHaveText("2곳");
+  await page.locator("#searchToggle").click();
+  await expect(page.locator("#searchInput")).toHaveValue("");
+  await page.locator("#searchInput").fill("없는식당");
+  await expect(page.locator("#resultCount")).toHaveText("0곳");
+  await page.locator("#filterModeButton").click();
+  await expect(page.locator("#resultCount")).toHaveText("2곳");
   expect(await page.evaluate(() => window.__mapStats.created)).toBe(1);
   expect(errors).toEqual([]);
 });

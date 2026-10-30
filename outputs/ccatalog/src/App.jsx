@@ -541,6 +541,7 @@ export default function App() {
             onFilterMode={() => {
               closeDialog(false);
               setSelectedId(null);
+              setQuery("");
               setSearchOpen(false);
               setListOpen(true);
             }}
