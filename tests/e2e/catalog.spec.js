@@ -375,14 +375,20 @@ test("restaurant routes support selection, back, forward and refresh without rem
     .filter({ hasText: "테스트면옥" })
     .click();
   await expect(page).toHaveURL(new RegExp(`#/restaurants/${restaurantId}$`));
-  await expect(page.locator("#selectedCard h2")).toHaveText("테스트면옥");
+  await expect(page.locator("#selectedCard .restaurant-title-name")).toHaveText(
+    "테스트면옥",
+  );
   await page.goBack();
   await expect(page.locator("#selectedCard")).toHaveClass(/hidden/);
   await page.goForward();
-  await expect(page.locator("#selectedCard h2")).toHaveText("테스트면옥");
+  await expect(page.locator("#selectedCard .restaurant-title-name")).toHaveText(
+    "테스트면옥",
+  );
   expect(await page.evaluate(() => window.__mapStats.created)).toBe(1);
   await page.reload();
-  await expect(page.locator("#selectedCard h2")).toHaveText("테스트면옥");
+  await expect(page.locator("#selectedCard .restaurant-title-name")).toHaveText(
+    "테스트면옥",
+  );
   await expect
     .poll(() => page.evaluate(() => window.__mapStats?.pans.length))
     .toBeGreaterThan(0);
@@ -393,7 +399,9 @@ test("direct routes wait for records and unavailable links return to the list", 
   page,
 }) => {
   await setup(page, { path: `/#/restaurants/${restaurantId}` });
-  await expect(page.locator("#selectedCard h2")).toHaveText("테스트면옥");
+  await expect(page.locator("#selectedCard .restaurant-title-name")).toHaveText(
+    "테스트면옥",
+  );
   await page.goto("/#/restaurants/88888888-8888-4888-8888-888888888888");
   await expect(page).toHaveURL(/#\/$/);
   await expect(page.locator("#selectedCard")).toHaveClass(/hidden/);
@@ -421,7 +429,9 @@ test("shared restaurant link survives Kakao login and the OAuth callback", async
     `/#access_token=${encodeURIComponent(state.token)}&refresh_token=fixture-refresh&expires_in=3600&token_type=bearer`,
   );
   await expect(page).toHaveURL(new RegExp(`#/restaurants/${restaurantId}$`));
-  await expect(page.locator("#selectedCard h2")).toHaveText("테스트면옥");
+  await expect(page.locator("#selectedCard .restaurant-title-name")).toHaveText(
+    "테스트면옥",
+  );
   expect(
     await page.evaluate(() =>
       sessionStorage.getItem("ccatalog.auth.returnRestaurant"),
@@ -619,7 +629,9 @@ test("filter, search, map and smooth centering retain shared state", async ({
   await page.locator('.dock-filter-button[data-filter="3"]').click();
   await expect(page.locator("#resultCount")).toHaveText("1곳");
   await page.locator(".restaurant-item").click();
-  await expect(page.locator("#selectedCard h2")).toHaveText("테스트면옥");
+  await expect(page.locator("#selectedCard .restaurant-title-name")).toHaveText(
+    "테스트면옥",
+  );
   await expect(page.locator("#resultCount")).toHaveText("1곳");
   const layout = await page.evaluate(() => {
     const pin = document
@@ -676,18 +688,47 @@ test("author edits the medal and resets opinions, then deletes", async ({
   state.votes[restaurantId] = { anotherMember: "down" };
   page.on("dialog", (dialog) => dialog.accept());
   await page.locator(".restaurant-item").first().click();
+  await expect(
+    page.locator("#selectedCard .restaurant-title-medal"),
+  ).toHaveText("🥇");
+  await expect(
+    page.locator("#selectedCard .card-side .rating-badge"),
+  ).toHaveCount(0);
+  const titleLayout = await page
+    .locator("#selectedCard h2")
+    .evaluate((heading) => {
+      const medal = heading.querySelector(".restaurant-title-medal");
+      const name = heading.querySelector(".restaurant-title-name");
+      return {
+        sameSize:
+          getComputedStyle(medal).fontSize ===
+          getComputedStyle(heading).fontSize,
+        medalFirst:
+          medal.getBoundingClientRect().right <=
+          name.getBoundingClientRect().left,
+      };
+    });
+  expect(titleLayout).toEqual({ sameSize: true, medalFirst: true });
   await page
     .locator("#selectedCard")
     .getByRole("button", { name: "수정", exact: true })
     .click();
   await expect(page.locator('input[name="rating"]').first()).toBeEnabled();
-  await page
-    .locator(".rating-field label")
-    .filter({ hasText: "은메달" })
-    .click();
+  await expect(page.locator(".rating-option-emoji")).toHaveText([
+    "🥉",
+    "🥈",
+    "🥇",
+  ]);
+  await page.getByTitle("은메달", { exact: true }).click();
+  await expect(
+    page.getByRole("radio", { name: "은메달", exact: true }),
+  ).toBeChecked();
   await page.locator("#memoInput").fill("수정된 메모");
   await page.locator("#spotSubmitButton").click();
   await expect(page.locator("#selectedCard .memo")).toHaveText("수정된 메모");
+  await expect(
+    page.locator("#selectedCard .restaurant-title-medal"),
+  ).toHaveText("🥈");
   const patch = state.writes.find(
     (item) => item.path.endsWith("/restaurants") && item.method === "PATCH",
   );
@@ -707,7 +748,9 @@ test("another member can read but cannot edit another author's record", async ({
 }) => {
   await setup(page);
   await page.locator(".restaurant-item").last().click();
-  await expect(page.locator("#selectedCard h2")).toHaveText("테스트카페");
+  await expect(page.locator("#selectedCard .restaurant-title-name")).toHaveText(
+    "테스트카페",
+  );
   await expect(
     page
       .locator("#selectedCard")
@@ -860,8 +903,8 @@ test("groups can be toggled and a shared branch has one pin with separate record
   await expect(page.locator(".group-records button")).toHaveCount(2);
   await page.locator(".group-records button").last().click();
   await expect(
-    page.locator("#selectedCard .card-side .rating-badge"),
-  ).toContainText("동메달");
+    page.locator("#selectedCard .restaurant-title-medal"),
+  ).toHaveAttribute("aria-label", "동메달");
   await page.locator("#adminButton").click();
   await page
     .locator(".account-group-row")
@@ -888,7 +931,9 @@ test("any member can register a searched place in their group", async ({
   await page.locator("#menuPriceDraftInput").fill("16000");
   await page.locator("#addMenuButton").click();
   await page.locator("#spotSubmitButton").click();
-  await expect(page.locator("#selectedCard h2")).toHaveText("검색된식당");
+  await expect(page.locator("#selectedCard .restaurant-title-name")).toHaveText(
+    "검색된식당",
+  );
   const insert = state.writes.find(
     (item) => item.path.endsWith("/restaurants") && item.method === "POST",
   );
@@ -1093,8 +1138,8 @@ test("vote replacement only changes opinion counts, even with a majority", async
   await expect(page.locator(".vote-options button").first()).toContainText("2");
   await page.getByRole("button", { name: "의견 닫기" }).click();
   await expect(
-    page.locator("#selectedCard .card-side .rating-badge"),
-  ).toContainText("동메달");
+    page.locator("#selectedCard .restaurant-title-medal"),
+  ).toHaveAttribute("aria-label", "동메달");
   expect(errors).toEqual([]);
 });
 
@@ -1151,6 +1196,6 @@ test("closing a pending vote still updates the map record when it completes", as
   await page.locator(".vote-options button").first().click();
   await page.getByRole("button", { name: "의견 닫기" }).click();
   await expect(
-    page.locator("#selectedCard .card-side .rating-badge"),
-  ).toContainText("동메달");
+    page.locator("#selectedCard .restaurant-title-medal"),
+  ).toHaveAttribute("aria-label", "동메달");
 });

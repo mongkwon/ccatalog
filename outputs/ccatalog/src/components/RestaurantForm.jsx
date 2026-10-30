@@ -314,11 +314,18 @@ export default function RestaurantForm({
                   <input
                     type="radio"
                     name="rating"
+                    aria-label={meta.label}
                     value={value}
                     checked={rating === Number(value)}
                     onChange={() => setRating(Number(value))}
                   />
-                  <span>{meta.label}</span>
+                  <span
+                    className="rating-option-emoji"
+                    title={meta.label}
+                    aria-hidden="true"
+                  >
+                    {meta.icon}
+                  </span>
                 </label>
               ))}
             </fieldset>

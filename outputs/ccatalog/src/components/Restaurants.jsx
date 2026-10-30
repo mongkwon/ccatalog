@@ -8,6 +8,7 @@ import {
   deliverySummary,
   menuItemsSummary,
   menuItemLabel,
+  RATING_META,
 } from "../lib/domain.js";
 import { placeKey } from "../lib/groups.js";
 
@@ -154,7 +155,16 @@ export function RestaurantDetail({
           )}
           <div className="card-layout">
             <div className="card-main">
-              <h2>{restaurant.name}</h2>
+              <h2 className="restaurant-title">
+                <span
+                  className="restaurant-title-medal"
+                  role="img"
+                  aria-label={RATING_META[restaurant.rating].label}
+                >
+                  {RATING_META[restaurant.rating].icon}
+                </span>
+                <span className="restaurant-title-name">{restaurant.name}</span>
+              </h2>
               <GroupLabel group={restaurant.group} />
               <p className="card-sub">
                 {[restaurant.category, restaurant.area]
@@ -220,7 +230,6 @@ export function RestaurantDetail({
               )}
             </div>
             <div className="card-side">
-              <RatingBadge rating={restaurant.rating} />
               <div className="card-actions">
                 <a
                   className="link-button"
