@@ -502,6 +502,7 @@ export default function App() {
             </div>
           </header>
           <AccountPanel
+            key={auth.user?.id || "guest"}
             catalog={catalog}
             open={authOpen}
             onClose={() => setAuthOpen(false)}

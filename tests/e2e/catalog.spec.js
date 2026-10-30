@@ -545,7 +545,7 @@ test("leaving removes only that group and the final departure removes the group"
   await page.getByRole("button", { name: "친구들 탈퇴", exact: true }).click();
   expect(state.groups).toHaveLength(2);
   page.on("dialog", (dialog) => dialog.accept());
-  await page.getByRole("button", { name: "친구들 초대 링크 발급" }).click();
+  await page.getByRole("button", { name: "친구들 초대 링크 공유" }).click();
   await expect(
     page.getByRole("textbox", { name: "초대 링크", exact: true }),
   ).toBeVisible();
@@ -744,6 +744,97 @@ test("invited member joins once and removes the invitation from the URL", async 
   ).toBe(null);
 });
 
+test("invite generation opens native sharing and cancellation preserves the same link", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    window.__shares = [];
+    Object.defineProperty(navigator, "share", {
+      configurable: true,
+      value: async (data) => {
+        window.__shares.push(data);
+        if (window.__shares.length === 1)
+          throw new DOMException("Cancelled", "AbortError");
+      },
+    });
+    Object.defineProperty(navigator, "canShare", {
+      configurable: true,
+      value: () => true,
+    });
+  });
+  const { state, errors } = await setup(page);
+  let confirmations = 0;
+  page.on("dialog", async (dialog) => {
+    confirmations++;
+    await dialog.accept();
+  });
+  await page.locator("#adminButton").click();
+  const inviteButton = page.getByRole("button", {
+    name: "친구들 초대 링크 공유",
+  });
+  await inviteButton.click();
+  await expect(page.locator("#authPanel .auth-status")).toContainText(
+    "초대 링크를 유지",
+  );
+  const value = await page
+    .getByRole("textbox", { name: "초대 링크", exact: true })
+    .inputValue();
+  expect(await page.evaluate(() => window.__shares[0])).toEqual({
+    title: "까탈로그 · 친구들",
+    text: "친구들에서 맛집을 함께 나눠요.",
+    url: value,
+  });
+  await inviteButton.click();
+  await expect(page.locator("#authPanel .auth-status")).toHaveText(
+    "공유 메뉴를 열었습니다",
+  );
+  expect(await page.evaluate(() => window.__shares.length)).toBe(2);
+  expect(
+    state.writes.filter((item) => item.path.endsWith("create_catalog_invite")),
+  ).toHaveLength(1);
+  expect(confirmations).toBe(1);
+  expect(errors).toEqual([]);
+});
+
+test("blocked native sharing offers a retry without regenerating the invite", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    window.__shareAttempts = 0;
+    Object.defineProperty(navigator, "share", {
+      configurable: true,
+      value: async () => {
+        window.__shareAttempts++;
+        if (window.__shareAttempts === 1)
+          throw new DOMException("Activation expired", "NotAllowedError");
+      },
+    });
+    Object.defineProperty(navigator, "canShare", {
+      configurable: true,
+      value: () => true,
+    });
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText: async () => {} },
+    });
+  });
+  const { state } = await setup(page);
+  page.on("dialog", (dialog) => dialog.accept());
+  await page.locator("#adminButton").click();
+  const button = page.getByRole("button", { name: "친구들 초대 링크 공유" });
+  await button.click();
+  await expect(page.locator("#authPanel .auth-status")).toContainText(
+    "초대를 다시 눌러",
+  );
+  await button.click();
+  await expect(page.locator("#authPanel .auth-status")).toHaveText(
+    "공유 메뉴를 열었습니다",
+  );
+  expect(
+    state.writes.filter((item) => item.path.endsWith("create_catalog_invite")),
+  ).toHaveLength(1);
+});
+
 test("new member creates a group and generates an invitation", async ({
   page,
 }) => {
@@ -754,7 +845,7 @@ test("new member creates a group and generates an invitation", async ({
   await page.getByRole("button", { name: "만들기", exact: true }).click();
   await expect(page.locator(".account-group-row")).toHaveCount(1);
   expect(state.groups[0].name).toBe("우리 맛집");
-  await page.getByRole("button", { name: "우리 맛집 초대 링크 발급" }).click();
+  await page.getByRole("button", { name: "우리 맛집 초대 링크 공유" }).click();
   await expect(
     page.getByRole("textbox", { name: "초대 링크", exact: true }),
   ).toHaveValue(new RegExp(`invite=${invitation}`));

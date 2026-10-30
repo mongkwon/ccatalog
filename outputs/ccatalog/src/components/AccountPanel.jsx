@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { authErrorMessage } from "../lib/domain.js";
 import { LogOut } from "lucide-react";
+import { shareInvite } from "../lib/share-invite.js";
 
 export function memberName(auth) {
   const metadata = auth.user?.user_metadata ?? {};
@@ -153,26 +154,38 @@ export default function AccountPanel({ catalog, open, onClose }) {
                   type="button"
                   className="auth-secondary-button"
                   disabled={busy}
-                  aria-label={`${group.name} 초대 링크 발급`}
+                  aria-label={`${group.name} 초대 링크 공유`}
                   onClick={() =>
                     act(async () => {
+                      const cached = linkGroupId === group.id ? link : "";
                       if (
+                        !cached &&
                         !window.confirm(
                           "새 초대 링크를 발급할까요? 기존 초대 링크는 만료됩니다.",
                         )
                       )
                         return;
-                      const value = await storeRef.current.createInvite(
-                        group.id,
-                      );
+                      const actor = auth.user.id;
+                      const value =
+                        cached ||
+                        (await storeRef.current.createInvite(group.id));
+                      if (storeRef.current.userId !== actor) return;
                       setLink(value);
                       setLinkGroupId(group.id);
-                      try {
-                        await navigator.clipboard.writeText(value);
-                        setNotice("초대 링크를 복사했습니다");
-                      } catch {
-                        setNotice("초대 링크를 선택해 복사해주세요");
-                      }
+                      const result = await shareInvite(value, group.name);
+                      setNotice(
+                        {
+                          shared: "공유 메뉴를 열었습니다",
+                          cancelled:
+                            "초대 링크를 유지했습니다. 초대를 다시 누르면 공유할 수 있습니다",
+                          copied: "초대 링크를 복사했습니다",
+                          manual: "초대 링크를 선택해 복사해주세요",
+                          "retry-copied":
+                            "초대 링크를 복사했습니다. 초대를 다시 눌러 공유를 시도할 수 있습니다",
+                          retry:
+                            "초대 링크가 준비됐습니다. 초대를 다시 누르거나 링크를 복사해주세요",
+                        }[result],
+                      );
                     })
                   }
                 >
@@ -253,7 +266,7 @@ export default function AccountPanel({ catalog, open, onClose }) {
               ))}
             </div>
           </form>
-          {!!link && (
+          {!!link && auth.groups.some((group) => group.id === linkGroupId) && (
             <input
               className="invite-link"
               aria-label="초대 링크"
