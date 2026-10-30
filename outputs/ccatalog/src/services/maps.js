@@ -7,6 +7,10 @@ import {
   escapeHtml,
   isValidCoordinate,
 } from "../lib/domain.js";
+import {
+  RestaurantClusters,
+  CLUSTER_MAX_ZOOM,
+} from "../lib/marker-clusters.js";
 
 function loadScript(src, checkReady, timeoutMs = 7000, callbackName = "") {
   return new Promise((resolve, reject) => {
@@ -211,6 +215,8 @@ class NaverMapAdapter {
     this.userMarker = null;
     this.clickHandler = null;
     this.clickListener = null;
+    this.clusters = new RestaurantClusters();
+    this.nodes = new Map();
   }
 
   async load() {
@@ -225,6 +231,7 @@ class NaverMapAdapter {
         DEFAULT_CENTER.lng,
       ),
       zoom: INITIAL_MAP_ZOOM,
+      maxZoom: CLUSTER_MAX_ZOOM,
       scaleControl: false,
       mapDataControl: false,
       zoomControl: true,
@@ -237,7 +244,16 @@ class NaverMapAdapter {
       this.map,
       "click",
       (event) => {
+        this.closeClusterMenu();
         this.clickHandler?.(normaliseNaverCoord(event.coord));
+      },
+    );
+    this.clusterListener = window.naver.maps.Event.addListener(
+      this.map,
+      "idle",
+      () => {
+        this.closeClusterMenu();
+        this.renderMarkers();
       },
     );
   }
@@ -266,27 +282,39 @@ class NaverMapAdapter {
   }
 
   render(restaurants, selectedId, onSelect, userLocation) {
-    const visibleIds = new Set(restaurants.map((restaurant) => restaurant.id));
+    this.clusters.update(restaurants);
+    this.selectedId = selectedId;
+    this.onSelect = onSelect;
+    this.renderMarkers();
+    this.setUserLocation(userLocation);
+  }
+
+  renderMarkers() {
+    if (!this.map) return;
+    const nodes = this.clusters.nodes(this.map.getZoom());
+    this.nodes = new Map(nodes.map((node) => [node.key, node]));
+    if (this.clusterMenu && !this.nodes.has(this.clusterMenuKey))
+      this.closeClusterMenu();
+    const visibleIds = new Set(this.nodes.keys());
     this.markers.forEach((entry, id) => {
       if (visibleIds.has(id)) return;
       window.naver.maps.Event.removeListener(entry.listener);
       entry.marker.setMap(null);
       this.markers.delete(id);
     });
-    this.onSelect = onSelect;
-    restaurants.forEach((restaurant) => {
-      const content = pinHtml(restaurant, selectedId);
-      const existing = this.markers.get(restaurant.id);
+    nodes.forEach((node) => {
+      const restaurant = node.restaurant;
+      const content = node.cluster
+        ? clusterHtml(node, this.selectedId)
+        : pinHtml(restaurant, this.selectedId);
+      const existing = this.markers.get(node.key);
       if (existing) {
-        if (
-          existing.lat !== restaurant.lat ||
-          existing.lng !== restaurant.lng
-        ) {
+        if (existing.lat !== node.lat || existing.lng !== node.lng) {
           existing.marker.setPosition(
-            new window.naver.maps.LatLng(restaurant.lat, restaurant.lng),
+            new window.naver.maps.LatLng(node.lat, node.lng),
           );
-          existing.lat = restaurant.lat;
-          existing.lng = restaurant.lng;
+          existing.lat = node.lat;
+          existing.lng = node.lng;
         }
         if (existing.content !== content) {
           existing.marker.setIcon({
@@ -298,8 +326,9 @@ class NaverMapAdapter {
         return;
       }
       const marker = new window.naver.maps.Marker({
-        position: new window.naver.maps.LatLng(restaurant.lat, restaurant.lng),
+        position: new window.naver.maps.LatLng(node.lat, node.lng),
         map: this.map,
+        zIndex: node.cluster ? 150 : 100,
         title: restaurant.name,
         icon: {
           content,
@@ -309,17 +338,92 @@ class NaverMapAdapter {
       const listener = window.naver.maps.Event.addListener(
         marker,
         "click",
-        () => this.onSelect?.(restaurant.id),
+        () => this.selectNode(node.key),
       );
-      this.markers.set(restaurant.id, {
+      this.markers.set(node.key, {
         marker,
         listener,
         content,
-        lat: restaurant.lat,
-        lng: restaurant.lng,
+        lat: node.lat,
+        lng: node.lng,
       });
     });
-    this.setUserLocation(userLocation);
+  }
+
+  selectNode(key) {
+    const node = this.nodes.get(key);
+    if (!node) return;
+    if (!node.cluster) {
+      this.closeClusterMenu();
+      this.onSelect?.(node.restaurant.id);
+      return;
+    }
+    const maximum = Math.min(
+      CLUSTER_MAX_ZOOM,
+      this.map.getMaxZoom?.() ?? CLUSTER_MAX_ZOOM,
+    );
+    if (this.map.getZoom() >= maximum) {
+      this.openClusterMenu(node);
+      return;
+    }
+    this.closeClusterMenu();
+    this.onSelect?.(null);
+    this.map.morph(
+      new window.naver.maps.LatLng(node.lat, node.lng),
+      Math.min(maximum, Math.max(this.map.getZoom() + 1, node.expansionZoom)),
+      { duration: 350 },
+    );
+  }
+
+  closeClusterMenu() {
+    this.clusterMenu?.remove();
+    this.clusterMenu = null;
+    this.clusterMenuKey = null;
+  }
+
+  openClusterMenu(node) {
+    this.closeClusterMenu();
+    const menu = document.createElement("section");
+    menu.className = "map-cluster-menu";
+    menu.setAttribute("aria-label", "겹친 맛집");
+    const header = document.createElement("header");
+    const title = document.createElement("strong");
+    title.textContent = `${node.members.length}곳`;
+    const close = document.createElement("button");
+    close.type = "button";
+    close.textContent = "닫기";
+    close.addEventListener("click", () => this.closeClusterMenu());
+    header.append(title, close);
+    menu.append(header);
+    for (const restaurant of node.members) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "cluster-restaurant";
+      button.textContent = `${RATING_META[restaurant.rating].icon} ${restaurant.name}`;
+      button.addEventListener("click", () => {
+        this.closeClusterMenu();
+        this.onSelect?.(restaurant.id);
+      });
+      menu.append(button);
+    }
+    for (const event of ["click", "pointerdown"])
+      menu.addEventListener(event, (event) => event.stopPropagation());
+    menu.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        event.stopPropagation();
+        this.closeClusterMenu();
+      }
+    });
+    this.mapHost.append(menu);
+    this.clusterMenu = menu;
+    this.clusterMenuKey = node.key;
+    const offset = this.map
+      .getProjection()
+      .fromCoordToOffset(new window.naver.maps.LatLng(node.lat, node.lng));
+    const half = menu.offsetWidth / 2;
+    menu.style.left = `${Math.max(half + 12, Math.min(this.mapHost.clientWidth - half - 12, offset.x))}px`;
+    menu.style.top = `${Math.max(menu.offsetHeight + 12, offset.y - 26)}px`;
+    menu.querySelector(".cluster-restaurant")?.focus({ preventScroll: true });
   }
 
   setUserLocation(coord) {
@@ -486,11 +590,14 @@ class NaverMapAdapter {
   }
 
   destroy() {
+    this.closeClusterMenu();
     this.markers.forEach(({ marker, listener }) => {
       window.naver?.maps?.Event.removeListener(listener);
       marker.setMap(null);
     });
     this.markers.clear();
+    if (this.clusterListener)
+      window.naver?.maps?.Event.removeListener(this.clusterListener);
     this.userMarker?.setMap(null);
     this.userMarker = null;
     if (this.clickListener) {
@@ -520,6 +627,14 @@ function pinHtml(restaurant, selectedId) {
     ? `<span class="pin-groups">${colors.map((color) => `<i style="background-color:${color}"></i>`).join("")}</span>`
     : "";
   return `<button type="button" class="pin-marker${restaurant.id === selectedId ? " is-selected" : ""}" data-rating="${restaurant.rating}" aria-label="${escapeHtml(restaurant.name)} ${meta.label}"><span class="pin-head"><span class="pin-level">${meta.icon}</span>${stripe}</span></button>`;
+}
+
+function clusterHtml(node, selectedId) {
+  const meta = RATING_META[node.restaurant.rating];
+  const selected = node.members.some(
+    (restaurant) => restaurant.id === selectedId,
+  );
+  return `<button type="button" class="pin-marker pin-cluster${selected ? " is-selected" : ""}" data-rating="${node.restaurant.rating}" aria-label="맛집 ${node.members.length}곳 모아보기"><span class="pin-head"><span class="pin-level" aria-hidden="true">${meta.icon}</span><span class="pin-count" aria-hidden="true">+${node.members.length - 1}</span></span></button>`;
 }
 
 function createPinElement(restaurant, selectedId, onSelect, userLocation) {

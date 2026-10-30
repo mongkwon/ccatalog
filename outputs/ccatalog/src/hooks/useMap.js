@@ -171,7 +171,7 @@ export function useMap({
     adapter?.render(
       pins,
       selectedId,
-      (id) => current.current.onSelect(id, { closePanel: true }),
+      (id) => current.current.onSelect(id, { closePanel: id !== null }),
       userLocation,
     );
   }, [adapter, pins, selectedId, userLocation]);

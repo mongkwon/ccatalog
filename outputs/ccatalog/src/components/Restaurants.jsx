@@ -1,8 +1,7 @@
 import { useLayoutEffect, useRef } from "react";
 import { RatingBadge } from "./common.jsx";
 import PhotoImage from "./PhotoImage.jsx";
-import { ExternalLink, Plus } from "lucide-react";
-import { branchBrandName } from "../lib/branches.js";
+import { Plus } from "lucide-react";
 import {
   deliveryLabels,
   deliverySummary,
@@ -126,7 +125,6 @@ export function RestaurantDetail({
   const alternatives = restaurant
     ? catalog.restaurants.filter((item) => samePlace(item, restaurant))
     : [];
-  const brand = branchBrandName(restaurant?.name);
   return (
     <article
       id="selectedCard"
@@ -203,17 +201,6 @@ export function RestaurantDetail({
               >
                 의견 · 메달 투표
               </button>
-              {brand && (
-                <a
-                  className="branch-search-link"
-                  href={`https://map.naver.com/p/search/${encodeURIComponent(brand)}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <span>네이버지도에서 다른 지점 찾기</span>
-                  <ExternalLink size={14} aria-hidden="true" />
-                </a>
-              )}
               {alternatives.length > 1 && (
                 <div className="group-records" aria-label="그룹별 메달">
                   {alternatives.map((item) => (

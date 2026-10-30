@@ -31,6 +31,8 @@ async function setup(
     viewerId = userId,
     sharedState = null,
     restaurantName = null,
+    closePins = false,
+    coincident = false,
   } = {},
 ) {
   const user = {
@@ -117,8 +119,9 @@ async function setup(
         category: "카페",
         rating: 1,
         area: "서울 종로구",
-        lat: duplicate ? 37.5666 : 37.572,
-        lng: duplicate ? 126.978 : 126.985,
+        lat: duplicate || coincident ? 37.5666 : closePins ? 37.56665 : 37.572,
+        lng:
+          duplicate || coincident ? 126.978 : closePins ? 126.97805 : 126.985,
         menus: ["커피"],
         menu_items: [{ name: "커피", price: "5,000원" }],
         delivery_apps: [],
@@ -828,7 +831,7 @@ test("restaurant list follows the map center without removing offscreen records"
   expect(errors).toEqual([]);
 });
 
-test("branch names offer a brand search in a separate Naver Maps tab", async ({
+test("only the original Naver Maps link remains in restaurant details", async ({
   page,
 }) => {
   await setup(page, { branched: true });
@@ -836,11 +839,7 @@ test("branch names offer a brand search in a separate Naver Maps tab", async ({
   const link = page.getByRole("link", {
     name: "네이버지도에서 다른 지점 찾기",
   });
-  await expect(link).toHaveAttribute(
-    "href",
-    `https://map.naver.com/p/search/${encodeURIComponent("정돈")}`,
-  );
-  await expect(link).toHaveAttribute("target", "_blank");
+  await expect(link).toHaveCount(0);
   await expect(
     page.getByRole("link", { name: "네이버지도", exact: true }),
   ).toHaveAttribute(
@@ -852,6 +851,50 @@ test("branch names offer a brand search in a separate Naver Maps tab", async ({
     .filter({ hasText: "테스트카페" })
     .click();
   await expect(link).toHaveCount(0);
+});
+
+test("nearby pins show plus counts and separate on cluster click or filtering", async ({
+  page,
+}, testInfo) => {
+  await setup(page, { closePins: true });
+  await expect(page.locator("#map .pin-cluster")).toHaveCount(1);
+  await expect(page.locator("#map .pin-count")).toHaveText("+1");
+  await expect(page.locator("#resultCount")).toHaveText("2곳");
+  await page.screenshot({ path: testInfo.outputPath("cluster.png") });
+  await page.locator("#map .pin-cluster").click();
+  await expect(page.locator("#map .pin-cluster")).toHaveCount(0);
+  await expect(page.locator("#map .pin-marker")).toHaveCount(2);
+  expect(await page.evaluate(() => window.__testMap.getZoom())).toBeGreaterThan(
+    13,
+  );
+  expect(await page.evaluate(() => window.__mapStats.created)).toBe(1);
+  await expect(page.locator("#resultCount")).toHaveText("2곳");
+  await page.evaluate(() => window.__testMap.setZoom(13));
+  await expect(page.locator("#map .pin-count")).toHaveText("+1");
+  await page.locator('.dock-filter-button[data-filter="1"]').click();
+  await expect(page.locator("#map .pin-cluster")).toHaveCount(0);
+  await expect(page.locator("#map .pin-marker")).toHaveCount(1);
+});
+
+test("coincident restaurants can be selected from the cluster at maximum zoom", async ({
+  page,
+}) => {
+  const { errors } = await setup(page, { coincident: true });
+  await page.evaluate(() =>
+    window.__testMap.morph(new window.naver.maps.LatLng(37.5666, 126.978), 21),
+  );
+  await page.locator("#map .pin-cluster").click();
+  await expect(
+    page.locator(".map-cluster-menu .cluster-restaurant"),
+  ).toHaveCount(2);
+  await page
+    .getByRole("button", { name: "🥉 테스트카페", exact: true })
+    .click();
+  await expect(page.locator("#selectedCard .restaurant-title-name")).toHaveText(
+    "테스트카페",
+  );
+  await expect(page.locator(".map-cluster-menu")).toHaveCount(0);
+  expect(errors).toEqual([]);
 });
 
 test("leaving removes only that group and the final departure removes the group", async ({

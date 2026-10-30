@@ -6,6 +6,7 @@
     iconWrites: 0,
     pans: [],
     fits: [],
+    morphs: [],
   });
   class Point {
     constructor(x, y) {
@@ -31,11 +32,30 @@
       this.host = host;
       window.__testMap = this;
       this.center = options.center;
+      this.zoom = options.zoom;
       this.markers = new Set();
       this.host.style.background = "#e7eff0";
     }
     getCenter() {
       return this.center;
+    }
+    getZoom() {
+      return this.zoom;
+    }
+    getMaxZoom() {
+      return 21;
+    }
+    setZoom(zoom) {
+      this.zoom = zoom;
+      this.draw();
+      this.emitIdle();
+    }
+    morph(coord, zoom) {
+      this.center = coord;
+      this.zoom = zoom;
+      stats.morphs.push({ lat: coord.lat(), lng: coord.lng(), zoom });
+      this.draw();
+      this.emitIdle();
     }
     panTo(coord) {
       this.center = coord;
@@ -61,23 +81,24 @@
         .forEach((listener) => listener.callback());
     }
     getProjection() {
+      const scale = 5000 * 2 ** (this.zoom - 13);
       return {
         fromCoordToOffset: (coord) =>
           new Point(
             this.host.clientWidth / 2 +
-              (coord.lng() - this.center.lng()) * 5000,
+              (coord.lng() - this.center.lng()) * scale,
             this.host.clientHeight / 2 -
-              (coord.lat() - this.center.lat()) * 5000,
+              (coord.lat() - this.center.lat()) * scale,
           ),
         fromOffsetToCoord: (point) =>
           new LatLng(
-            this.center.lat() - (point.y - this.host.clientHeight / 2) / 5000,
-            this.center.lng() + (point.x - this.host.clientWidth / 2) / 5000,
+            this.center.lat() - (point.y - this.host.clientHeight / 2) / scale,
+            this.center.lng() + (point.x - this.host.clientWidth / 2) / scale,
           ),
         fromCoordToPoint: (coord) =>
-          new Point(coord.lng() * 5000, -coord.lat() * 5000),
+          new Point(coord.lng() * scale, -coord.lat() * scale),
         fromPointToCoord: (point) =>
-          new LatLng(-point.y / 5000, point.x / 5000),
+          new LatLng(-point.y / scale, point.x / scale),
       };
     }
     draw() {
@@ -89,6 +110,7 @@
       this.position = options.position;
       this.listeners = [];
       this.setIcon(options.icon);
+      this.element.style.zIndex = String(options.zIndex ?? 100);
       this.setMap(options.map);
     }
     setIcon(icon) {

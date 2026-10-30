@@ -135,6 +135,10 @@ export default function App() {
   );
   const onSelect = useCallback((id, { closePanel = false } = {}) => {
     setDialog((dialog) => ({ ...dialog, open: false }));
+    if (id === null) {
+      setListOpen(true);
+      setSearchOpen(false);
+    }
     if (closePanel) {
       setListOpen(false);
       setSearchOpen(false);
