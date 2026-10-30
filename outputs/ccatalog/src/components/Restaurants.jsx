@@ -90,7 +90,14 @@ export function RestaurantList({
                         title={restaurant.group.name}
                       />
                     )}
-                    <span>{restaurant.name}</span>
+                    <span
+                      className="item-medal"
+                      role="img"
+                      aria-label={RATING_META[restaurant.rating].label}
+                    >
+                      {RATING_META[restaurant.rating].icon}
+                    </span>
+                    <span className="item-name">{restaurant.name}</span>
                   </h3>
                   <p className="item-sub">
                     {[restaurant.category, restaurant.area]
@@ -98,7 +105,6 @@ export function RestaurantList({
                       .join(" · ")}
                   </p>
                 </div>
-                <RatingBadge rating={restaurant.rating} />
               </div>
               {preview && <p className="item-menu-preview">{preview}</p>}
             </button>

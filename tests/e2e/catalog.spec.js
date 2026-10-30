@@ -681,6 +681,38 @@ test("shared restaurant link survives Kakao login and the OAuth callback", async
   expect(errors).toEqual([]);
 });
 
+test("list medals appear as name-sized emoji before restaurant names without badges", async ({
+  page,
+}) => {
+  await setup(page);
+  await expect(page.locator(".restaurant-item .item-medal")).toHaveText([
+    "🥇",
+    "🥉",
+  ]);
+  await expect(page.locator(".restaurant-item .rating-badge")).toHaveCount(0);
+  const layout = await page
+    .locator(".restaurant-item h3")
+    .evaluateAll((headings) =>
+      headings.every((heading) => {
+        const medal = heading.querySelector(".item-medal");
+        const name = heading.querySelector(".item-name");
+        return (
+          getComputedStyle(medal).fontSize ===
+            getComputedStyle(heading).fontSize &&
+          medal.getBoundingClientRect().right <=
+            name.getBoundingClientRect().left
+        );
+      }),
+    );
+  expect(layout).toBe(true);
+  await page.locator('.dock-filter-button[data-filter="1"]').click();
+  await expect(page.locator(".restaurant-item .item-medal")).toHaveText("🥉");
+  await expect(page.locator(".restaurant-item .item-medal")).toHaveAttribute(
+    "aria-label",
+    "동메달",
+  );
+});
+
 test("list scroll resets only when restaurant order changes", async ({
   page,
 }) => {
@@ -700,7 +732,7 @@ test("list scroll resets only when restaurant order changes", async ({
       new window.naver.maps.LatLng(center.lat() + 0.00000001, center.lng()),
     );
   });
-  await expect(page.locator(".restaurant-item h3").first()).toHaveText(
+  await expect(page.locator(".restaurant-item .item-name").first()).toHaveText(
     "테스트면옥",
   );
   await expect
@@ -709,7 +741,7 @@ test("list scroll resets only when restaurant order changes", async ({
   await page.evaluate(() =>
     window.__testMap.panTo(new window.naver.maps.LatLng(37.572, 126.985)),
   );
-  await expect(page.locator(".restaurant-item h3").first()).toHaveText(
+  await expect(page.locator(".restaurant-item .item-name").first()).toHaveText(
     "테스트카페",
   );
   await expect
@@ -723,7 +755,7 @@ test("restaurant list follows the map center without removing offscreen records"
 }) => {
   const { errors } = await setup(page);
   await expect(page.locator(".user-location-marker")).toBeVisible();
-  await expect(page.locator(".restaurant-item h3").first()).toHaveText(
+  await expect(page.locator(".restaurant-item .item-name").first()).toHaveText(
     "테스트면옥",
   );
   const before = await page.evaluate(() => ({
@@ -733,7 +765,7 @@ test("restaurant list follows the map center without removing offscreen records"
   await page.evaluate(() =>
     window.__testMap.panTo(new window.naver.maps.LatLng(37.572, 126.985)),
   );
-  await expect(page.locator(".restaurant-item h3").first()).toHaveText(
+  await expect(page.locator(".restaurant-item .item-name").first()).toHaveText(
     "테스트카페",
   );
   await expect(page.locator("#resultCount")).toHaveText("2곳");
@@ -745,16 +777,18 @@ test("restaurant list follows the map center without removing offscreen records"
     })),
   ).toEqual({ created: 1, pans: before.pans + 1, icons: before.icons });
   await page.locator('.dock-filter-button[data-filter="3"]').click();
-  await expect(page.locator(".restaurant-item h3")).toHaveText("테스트면옥");
+  await expect(page.locator(".restaurant-item .item-name")).toHaveText(
+    "테스트면옥",
+  );
   await expect(page.locator("#resultCount")).toHaveText("1곳");
   await page.locator('.dock-filter-button[data-filter="all"]').click();
-  await expect(page.locator(".restaurant-item h3").first()).toHaveText(
+  await expect(page.locator(".restaurant-item .item-name").first()).toHaveText(
     "테스트카페",
   );
   await page.evaluate(() =>
     window.__testMap.panTo(new window.naver.maps.LatLng(37.5666, 126.978)),
   );
-  await expect(page.locator(".restaurant-item h3").first()).toHaveText(
+  await expect(page.locator(".restaurant-item .item-name").first()).toHaveText(
     "테스트면옥",
   );
   expect(errors).toEqual([]);
