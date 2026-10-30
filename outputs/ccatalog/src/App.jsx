@@ -586,6 +586,7 @@ export default function App() {
         onPlace={(coord) => map.adapterRef.current?.panTo(coord)}
       />
       <DiscussionDialog
+        memberNames={catalog.memberNames}
         key={`${auth.user?.id}:${dialog.restaurant?.id}`}
         open={dialog.type === "discussion" && dialog.open}
         restaurant={dialog.type === "discussion" ? dialogRestaurant : null}

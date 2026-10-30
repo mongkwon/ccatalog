@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { SupabaseRestaurantStore } from "../services/restaurants.js";
 import { reconcileById, reuseValue } from "../lib/reconcile.js";
+import { latestNameRecord, mergeMemberNames } from "../lib/catalog-names.js";
 
 const emptyAuth = {
   status: "loading",
@@ -18,6 +19,7 @@ export function useCatalog() {
   const [recordsReady, setRecordsReady] = useState(false);
   const [hiddenGroups, setHiddenGroups] = useState([]);
   const [inviteMessage, setInviteMessage] = useState("");
+  const [memberNames, setMemberNames] = useState({});
   const storeRef = useRef(null);
   const revision = useRef(0);
   const dataRevision = useRef(0);
@@ -31,6 +33,7 @@ export function useCatalog() {
       if (request !== revision.current) return;
       if (loadedUserId.current !== (context.user?.id ?? null)) {
         setRestaurants([]);
+        setMemberNames({});
         setRecordsReady(false);
       }
       loadedUserId.current = context.user?.id ?? null;
@@ -39,7 +42,18 @@ export function useCatalog() {
           reuseValue(current, {
             ...current,
             ...context,
-            groups: reconcileById(current.groups, context.groups),
+            profile: context.profile
+              ? latestNameRecord(current.profile, context.profile)
+              : context.profile,
+            groups: reconcileById(
+              current.groups,
+              context.groups.map((group) =>
+                latestNameRecord(
+                  current.groups.find((previous) => previous.id === group.id),
+                  group,
+                ),
+              ),
+            ),
             status: "ready",
             error: "",
           }),
@@ -123,6 +137,7 @@ export function useCatalog() {
           ++revision.current;
           if (userChanged || !store.userId) {
             loadedUserId.current = null;
+            setMemberNames({});
             setRecordsReady(false);
             setRestaurants([]);
             setAuth(emptyAuth);
@@ -151,6 +166,92 @@ export function useCatalog() {
       store?.authSubscription?.unsubscribe();
     };
   }, [syncAuth]);
+
+  const applyNameContext = useCallback((context, actor) => {
+    if (storeRef.current?.userId !== actor) return;
+    setAuth((current) => {
+      if (current.user?.id !== actor) return current;
+      return {
+        ...current,
+        profile: context.profile
+          ? latestNameRecord(current.profile, context.profile)
+          : current.profile,
+        groups: context.group
+          ? current.groups.map((group) =>
+              group.id === context.group.id
+                ? latestNameRecord(group, context.group)
+                : group,
+            )
+          : current.groups,
+      };
+    });
+    setMemberNames((previous) =>
+      mergeMemberNames(previous, [
+        ...(context.members || []),
+        ...(context.profile ? [context.profile] : []),
+      ]),
+    );
+  }, []);
+  const groupScope = auth.groups
+    .map((group) => group.id)
+    .sort()
+    .join(",");
+  useEffect(() => {
+    if (!ready || !auth.user || auth.user.is_anonymous) return;
+    const store = storeRef.current;
+    const actor = auth.user.id;
+    let active = true;
+    const timers = new Map();
+    const requests = new Map();
+    const refresh = (groupId) => {
+      clearTimeout(timers.get(groupId));
+      timers.set(
+        groupId,
+        setTimeout(async () => {
+          const request = (requests.get(groupId) || 0) + 1;
+          requests.set(groupId, request);
+          try {
+            const context = await store.nameContext(groupId);
+            if (active && requests.get(groupId) === request)
+              applyNameContext(context, actor);
+          } catch (error) {
+            if (active && error.code === "42501") syncAuth();
+          }
+        }, 60),
+      );
+    };
+    const ids = groupScope ? groupScope.split(",") : [];
+    const stop = store.subscribeNameChanges(ids, refresh);
+    const resume = () => {
+      if (document.visibilityState === "visible")
+        [null, ...ids].forEach(refresh);
+    };
+    window.addEventListener("online", resume);
+    document.addEventListener("visibilitychange", resume);
+    return () => {
+      active = false;
+      stop();
+      timers.forEach(clearTimeout);
+      window.removeEventListener("online", resume);
+      document.removeEventListener("visibilitychange", resume);
+    };
+  }, [ready, auth.user?.id, groupScope, applyNameContext, syncAuth]);
+  const updateNickname = useCallback(
+    async (nickname) => {
+      const actor = storeRef.current.userId;
+      const profile = await storeRef.current.updateNickname(nickname);
+      applyNameContext({ profile }, actor);
+    },
+    [applyNameContext],
+  );
+  const renameGroup = useCallback(
+    async (groupId, name) => {
+      const actor = storeRef.current.userId;
+      const group = await storeRef.current.renameGroup(groupId, name);
+      applyNameContext({ group }, actor);
+    },
+    [applyNameContext],
+  );
 
   const refreshRestaurants = useCallback(async () => {
     const request = revision.current;
@@ -266,6 +367,9 @@ export function useCatalog() {
     isMember,
     ownsRestaurant,
     leaveGroup,
+    updateNickname,
+    renameGroup,
+    memberNames,
     hiddenGroups,
     setHiddenGroups,
     inviteMessage,

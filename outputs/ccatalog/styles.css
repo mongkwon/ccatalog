@@ -445,6 +445,47 @@ button {
 .account-group-row label {
   flex: 1;
 }
+
+.member-name-row,
+.name-edit-form {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.member-name-row strong {
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.name-edit-button {
+  display: grid;
+  place-items: center;
+  flex: 0 0 30px;
+  width: 30px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--soft-ink);
+}
+.name-edit-button:disabled {
+  opacity: 0.4;
+}
+.name-edit-form {
+  margin: 6px 0;
+}
+.name-edit-form input {
+  width: 100%;
+  min-width: 0;
+  height: 36px;
+  padding: 0 9px;
+  border: 1px solid var(--edge-soft);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.2);
+  color: var(--ink);
+  font-size: 13px;
+}
 .account-group-row label span {
   overflow-wrap: anywhere;
   min-width: 0;

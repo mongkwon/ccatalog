@@ -15,6 +15,7 @@ export default function DiscussionDialog({
   storeRef,
   onOutcome,
   onClose,
+  memberNames = {},
 }) {
   const [snapshot, setSnapshot] = useState(null);
   const [comments, setComments] = useState([]);
@@ -220,7 +221,10 @@ export default function DiscussionDialog({
               {comments.map((comment) => (
                 <article className="discussion-comment" key={comment.id}>
                   <header>
-                    <strong>{comment.nickname}</strong>
+                    <strong>
+                      {memberNames[comment.user_id]?.nickname ||
+                        comment.nickname}
+                    </strong>
                     <time dateTime={comment.created_at}>
                       {new Date(comment.created_at).toLocaleDateString("ko-KR")}
                     </time>

@@ -52,7 +52,7 @@ export class SupabaseRestaurantStore {
     const [profile, groups] = await Promise.all([
       this.client
         .from("profiles")
-        .select("id,nickname,avatar_url")
+        .select("id,nickname,avatar_url,updated_at")
         .eq("id", user.id)
         .maybeSingle(),
       this.listGroups(),
@@ -63,10 +63,70 @@ export class SupabaseRestaurantStore {
   async listGroups() {
     const { data, error } = await this.client
       .from("catalog_groups")
-      .select("id,name,color,created_at")
+      .select("id,name,color,created_at,updated_at")
       .order("created_at");
     if (error) throw error;
     return data ?? [];
+  }
+  async updateNickname(nickname) {
+    const { data, error } = await this.client
+      .from("profiles")
+      .update({ nickname: nickname.trim() })
+      .eq("id", this.userId)
+      .select("id,nickname,avatar_url,updated_at")
+      .single();
+    if (error) throw error;
+    return data;
+  }
+  async renameGroup(groupId, name) {
+    const { data, error } = await this.client
+      .from("catalog_groups")
+      .update({ name: name.trim() })
+      .eq("id", groupId)
+      .select("id,name,color,created_at,updated_at")
+      .single();
+    if (error) throw error;
+    return data;
+  }
+  async nameContext(groupId = null) {
+    const { data, error } = await this.client.rpc("catalog_name_context", {
+      p_group_id: groupId,
+    });
+    if (error) throw error;
+    return data;
+  }
+  subscribeNameChanges(groupIds, onChange) {
+    const topics = [
+      { topic: `catalog-user:${this.userId}`, groupId: null },
+      ...groupIds.map((groupId) => ({
+        topic: `catalog-group:${groupId}`,
+        groupId,
+      })),
+    ];
+    const channels = topics.map(({ topic, groupId }) => {
+      const entry = { status: "CONNECTING", groupId };
+      entry.channel = this.client
+        .channel(topic, { config: { private: true } })
+        .on("broadcast", { event: "catalog_names" }, () => onChange(groupId))
+        .subscribe((status) => {
+          entry.status = status;
+          if (status === "SUBSCRIBED") onChange(groupId);
+        });
+      return entry;
+    });
+    const fallback = setInterval(
+      () =>
+        channels
+          .filter((entry) => entry.status !== "SUBSCRIBED")
+          .forEach((entry) => onChange(entry.groupId)),
+      30000,
+    );
+    return () => {
+      clearInterval(fallback);
+      channels.forEach(({ channel }) => {
+        this.client.removeChannel(channel).catch(() => {});
+      });
+    };
   }
   async createGroup(name, color) {
     const { data, error } = await this.client.rpc("create_catalog_group", {

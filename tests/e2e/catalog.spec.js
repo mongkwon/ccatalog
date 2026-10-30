@@ -28,10 +28,12 @@ async function setup(
     branched = false,
     manyRestaurants = false,
     path = null,
+    viewerId = userId,
+    sharedState = null,
   } = {},
 ) {
   const user = {
-    id: userId,
+    id: viewerId,
     aud: "authenticated",
     role: "authenticated",
     app_metadata: {},
@@ -40,7 +42,7 @@ async function setup(
     created_at: "2026-01-01T00:00:00Z",
   };
   const claims = Buffer.from(
-    JSON.stringify({ sub: userId, exp: 2097857037, role: "authenticated" }),
+    JSON.stringify({ sub: viewerId, exp: 2097857037, role: "authenticated" }),
   ).toString("base64url");
   const token = `eyJhbGciOiJIUzI1NiJ9.${claims}.signature`;
   await page.addInitScript(
@@ -83,7 +85,7 @@ async function setup(
     },
     { user, token, guest, tutorial },
   );
-  const state = {
+  const state = sharedState || {
     groups: noGroups
       ? []
       : [
@@ -139,7 +141,61 @@ async function setup(
     writes: [],
     signed: 0,
     token,
+    profiles: {
+      [userId]: {
+        id: userId,
+        nickname: "테스트회원",
+        updated_at: "2026-01-01T00:00:00Z",
+      },
+      [otherId]: {
+        id: otherId,
+        nickname: "친구",
+        updated_at: "2026-01-01T00:00:00Z",
+      },
+    },
+    sockets: [],
   };
+  state.emitNameChange ||= (groupId = null, actor = viewerId) => {
+    const topic = groupId
+      ? `realtime:catalog-group:${groupId}`
+      : `realtime:catalog-user:${actor}`;
+    for (const entry of state.sockets)
+      if (entry.topics.has(topic))
+        entry.socket.send(
+          JSON.stringify([
+            entry.topics.get(topic),
+            null,
+            topic,
+            "broadcast",
+            { event: "catalog_names", payload: {}, type: "broadcast" },
+          ]),
+        );
+  };
+  await page.routeWebSocket(
+    "wss://fixture.supabase.co/realtime/v1/websocket**",
+    (socket) => {
+      const entry = { socket, topics: new Map() };
+      state.sockets.push(entry);
+      socket.onMessage((message) => {
+        const [joinRef, ref, topic, event] = JSON.parse(String(message));
+        if (event === "phx_join") entry.topics.set(topic, joinRef);
+        if (event === "phx_leave") entry.topics.delete(topic);
+        if (["phx_join", "phx_leave", "heartbeat"].includes(event))
+          socket.send(
+            JSON.stringify([
+              joinRef,
+              ref,
+              topic,
+              "phx_reply",
+              { status: "ok", response: {} },
+            ]),
+          );
+      });
+      socket.onClose(() => {
+        state.sockets = state.sockets.filter((item) => item !== entry);
+      });
+    },
+  );
   if (manyRestaurants) {
     for (let index = 0; index < 6; index++)
       state.restaurants.push({
@@ -188,10 +244,31 @@ async function setup(
     let body = [];
     if (path.includes("/auth/v1/user")) body = user;
     else if (path.includes("/auth/v1/logout")) body = {};
-    else if (path.endsWith("/profiles"))
-      body = [{ id: userId, nickname: "테스트회원" }];
-    else if (path.endsWith("/catalog_groups")) body = state.groups;
-    else if (path.endsWith("/rpc/create_catalog_group")) {
+    else if (path.endsWith("/profiles")) {
+      if (method === "PATCH") {
+        Object.assign(state.profiles[viewerId], payload, {
+          updated_at: new Date().toISOString(),
+        });
+        body = state.profiles[viewerId];
+        state.emitNameChange(null, viewerId);
+        state.groups.forEach((group) => state.emitNameChange(group.id));
+      } else body = [state.profiles[viewerId]];
+    } else if (path.endsWith("/catalog_groups")) {
+      if (method === "PATCH") {
+        const group = state.groups.find(
+          (item) => `eq.${item.id}` === url.searchParams.get("id"),
+        );
+        Object.assign(group, payload, { updated_at: new Date().toISOString() });
+        body = group;
+        state.emitNameChange(group.id);
+      } else body = state.groups;
+    } else if (path.endsWith("/rpc/catalog_name_context")) {
+      const group = state.groups.find((item) => item.id === payload.p_group_id);
+      body = {
+        profile: state.profiles[viewerId],
+        ...(group ? { group, members: Object.values(state.profiles) } : {}),
+      };
+    } else if (path.endsWith("/rpc/create_catalog_group")) {
       state.groups.push({
         id: secondGroupId,
         name: payload.p_name,
@@ -365,6 +442,112 @@ async function setup(
     .toBe(1);
   return { state, errors };
 }
+
+test("nickname and group renames reach another member without refreshing or clearing their draft", async ({
+  page,
+  browser,
+}) => {
+  const { state } = await setup(page);
+  state.comments.push({
+    id: "name-comment",
+    restaurant_id: restaurantId,
+    user_id: userId,
+    nickname: "테스트회원",
+    body: "작성자 의견",
+    created_at: "2026-10-01T00:00:00Z",
+  });
+  const secondContext = await browser.newContext({
+    baseURL: "http://127.0.0.1:4174",
+  });
+  const other = await secondContext.newPage();
+  await setup(other, { viewerId: otherId, sharedState: state });
+  await other
+    .locator(".restaurant-item")
+    .filter({ hasText: "테스트면옥" })
+    .click();
+  await other.getByRole("button", { name: "의견 · 메달 투표" }).click();
+  await expect(other.locator(".discussion-comment header strong")).toHaveText(
+    "테스트회원",
+  );
+  await other.locator(".comment-form textarea").fill("작성 중인 의견");
+  await expect
+    .poll(
+      () =>
+        state.sockets.filter((entry) =>
+          entry.topics.has(`realtime:catalog-group:${groupId}`),
+        ).length,
+    )
+    .toBe(2);
+  await page.locator("#adminButton").click();
+  await page.getByRole("button", { name: "닉네임 수정", exact: true }).click();
+  await page
+    .getByRole("textbox", { name: "닉네임", exact: true })
+    .fill("새로운 닉네임");
+  await page.getByRole("button", { name: "닉네임 저장", exact: true }).click();
+  await expect(page.locator(".member-name-row strong")).toHaveText(
+    "새로운 닉네임",
+  );
+  await expect(other.locator(".discussion-comment header strong")).toHaveText(
+    "새로운 닉네임",
+  );
+  await expect(other.locator(".comment-form textarea")).toHaveValue(
+    "작성 중인 의견",
+  );
+  await page
+    .getByRole("button", { name: "친구들 이름 수정", exact: true })
+    .click();
+  await page
+    .getByRole("textbox", { name: "그룹 이름", exact: true })
+    .fill("맛집 동료들");
+  await page
+    .getByRole("button", { name: "그룹 이름 저장", exact: true })
+    .click();
+  await expect(
+    page.getByRole("button", {
+      name: "맛집 동료들 초대 링크 공유",
+      exact: true,
+    }),
+  ).toBeVisible();
+  await other.getByRole("button", { name: "의견 닫기" }).click();
+  await expect(other.locator("#selectedCard .group-label")).toContainText(
+    "맛집 동료들",
+  );
+  await other.locator("#adminButton").click();
+  await expect(
+    other.getByRole("button", { name: "맛집 동료들 이름 수정", exact: true }),
+  ).toBeVisible();
+  expect(await other.evaluate(() => window.__mapStats.created)).toBe(1);
+  await secondContext.close();
+});
+
+test("name editing supports cancellation and rejects blank input", async ({
+  page,
+}) => {
+  const { state } = await setup(page);
+  await page.locator("#adminButton").click();
+  await page.getByRole("button", { name: "닉네임 수정", exact: true }).click();
+  await page.getByRole("textbox", { name: "닉네임", exact: true }).fill("   ");
+  await expect(
+    page.getByRole("button", { name: "닉네임 저장", exact: true }),
+  ).toBeDisabled();
+  await page
+    .getByRole("button", { name: "닉네임 수정 취소", exact: true })
+    .click();
+  expect(state.profiles[userId].nickname).toBe("테스트회원");
+  await page
+    .getByRole("button", { name: "친구들 이름 수정", exact: true })
+    .click();
+  await page
+    .getByRole("textbox", { name: "그룹 이름", exact: true })
+    .fill("   ");
+  await expect(
+    page.getByRole("button", { name: "그룹 이름 저장", exact: true }),
+  ).toBeDisabled();
+  await page
+    .getByRole("button", { name: "그룹 이름 수정 취소", exact: true })
+    .click();
+  expect(state.groups[0].name).toBe("친구들");
+});
 
 test("restaurant routes support selection, back, forward and refresh without remounting the map", async ({
   page,
