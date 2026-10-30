@@ -3,6 +3,22 @@ import { distanceKmBetween, isValidCoordinate } from "./domain.js";
 
 export const CLUSTER_MAX_ZOOM = 21;
 
+const MEDAL_TINTS = {
+  1: "rgba(184, 130, 88, 0.46)",
+  2: "rgba(163, 176, 190, 0.48)",
+  3: "rgba(214, 174, 77, 0.48)",
+};
+
+export function clusterFill(members) {
+  const colors = [...new Set(members.map((member) => Number(member.rating)))]
+    .sort((a, b) => a - b)
+    .map((rating) => MEDAL_TINTS[rating])
+    .filter(Boolean);
+  return colors.length > 1
+    ? `linear-gradient(135deg, ${colors.join(", ")})`
+    : colors[0] || "rgba(245, 247, 250, 0.28)";
+}
+
 export class RestaurantClusters {
   constructor() {
     this.signature = "";
@@ -23,7 +39,7 @@ export class RestaurantClusters {
     this.signature = signature;
     // Naver's Web Mercator map uses 256px tiles; radius is measured in CSS pixels.
     this.index = new Supercluster({
-      radius: 48,
+      radius: 52,
       extent: 256,
       maxZoom: CLUSTER_MAX_ZOOM,
     }).load(

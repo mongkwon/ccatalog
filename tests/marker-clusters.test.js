@@ -1,6 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { RestaurantClusters } from "../outputs/ccatalog/src/lib/marker-clusters.js";
+import {
+  clusterFill,
+  RestaurantClusters,
+} from "../outputs/ccatalog/src/lib/marker-clusters.js";
 import { mapRecords } from "../outputs/ccatalog/src/lib/groups.js";
 
 const points = [
@@ -8,6 +11,17 @@ const points = [
   { id: "b", name: "가운데 식당", lat: 37.5001, lng: 127.0001, rating: 1 },
   { id: "c", name: "끝 식당", lat: 37.5002, lng: 127.0002, rating: 2 },
 ];
+test("cluster fill uses only present medal colors and a solid tint for one grade", () => {
+  const fill = clusterFill([{ rating: 3 }, { rating: 2 }, { rating: 3 }]);
+  assert(fill.startsWith("linear-gradient(135deg,"));
+  assert(fill.includes("rgba(214, 174, 77, 0.48)"));
+  assert(fill.includes("rgba(163, 176, 190, 0.48)"));
+  assert(!fill.includes("rgba(184, 130, 88, 0.46)"));
+  assert.equal(
+    clusterFill([{ rating: 1 }, { rating: 1 }]),
+    "rgba(184, 130, 88, 0.46)",
+  );
+});
 test("nearby pins cluster at low zoom and choose the central restaurant, independent of medals", () => {
   const model = new RestaurantClusters();
   model.update(points);

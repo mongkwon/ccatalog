@@ -2100,12 +2100,19 @@ button {
     0 1px 0 rgba(17, 24, 32, 0.04);
 }
 
+.pin-cluster {
+  width: 52px;
+  height: 52px;
+}
 .pin-cluster .pin-head {
   --medal-color: #7b8490;
+  width: 52px;
+  height: 52px;
   border-color: var(--edge-soft);
+  background: var(--cluster-fill, var(--dock-surface));
 }
 .pin-count {
-  font-size: 17px;
+  font-size: 19px;
   font-weight: 900;
   line-height: 1;
 }

@@ -860,12 +860,25 @@ test("nearby pins show total counts without medals and separate on click or filt
   await expect(page.locator("#map .pin-cluster")).toHaveCount(1);
   await expect(page.locator("#map .pin-count")).toHaveText("2");
   await expect(page.locator("#map .pin-cluster .pin-level")).toHaveCount(0);
-  await expect(page.locator("#map .pin-cluster")).not.toHaveAttribute("data-rating");
+  await expect(page.locator("#map .pin-cluster")).not.toHaveAttribute(
+    "data-rating",
+  );
+  const cluster = await page.locator("#map .pin-cluster").boundingBox();
+  expect(cluster.width).toBe(52);
+  expect(cluster.height).toBe(52);
+  expect(
+    await page
+      .locator("#map .pin-cluster .pin-head")
+      .evaluate((el) => getComputedStyle(el).backgroundImage),
+  ).toContain("linear-gradient(");
   await expect(page.locator("#resultCount")).toHaveText("2곳");
   await page.screenshot({ path: testInfo.outputPath("cluster.png") });
   await page.locator("#map .pin-cluster").click();
   await expect(page.locator("#map .pin-cluster")).toHaveCount(0);
   await expect(page.locator("#map .pin-marker")).toHaveCount(2);
+  expect(
+    (await page.locator("#map .pin-marker").first().boundingBox()).width,
+  ).toBe(44);
   expect(await page.evaluate(() => window.__testMap.getZoom())).toBeGreaterThan(
     13,
   );

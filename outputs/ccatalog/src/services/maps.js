@@ -10,6 +10,7 @@ import {
 import {
   RestaurantClusters,
   CLUSTER_MAX_ZOOM,
+  clusterFill,
 } from "../lib/marker-clusters.js";
 
 function loadScript(src, checkReady, timeoutMs = 7000, callbackName = "") {
@@ -319,7 +320,10 @@ class NaverMapAdapter {
         if (existing.content !== content) {
           existing.marker.setIcon({
             content,
-            anchor: new window.naver.maps.Point(22, 22),
+            anchor: new window.naver.maps.Point(
+              node.cluster ? 26 : 22,
+              node.cluster ? 26 : 22,
+            ),
           });
           existing.content = content;
         }
@@ -332,7 +336,10 @@ class NaverMapAdapter {
         title: node.cluster ? `맛집 ${node.members.length}곳` : restaurant.name,
         icon: {
           content,
-          anchor: new window.naver.maps.Point(22, 22),
+          anchor: new window.naver.maps.Point(
+            node.cluster ? 26 : 22,
+            node.cluster ? 26 : 22,
+          ),
         },
       });
       const listener = window.naver.maps.Event.addListener(
@@ -633,7 +640,7 @@ function clusterHtml(node, selectedId) {
   const selected = node.members.some(
     (restaurant) => restaurant.id === selectedId,
   );
-  return `<button type="button" class="pin-marker pin-cluster${selected ? " is-selected" : ""}" aria-label="맛집 ${node.members.length}곳 모아보기"><span class="pin-head"><span class="pin-count" aria-hidden="true">${node.members.length}</span></span></button>`;
+  return `<button type="button" class="pin-marker pin-cluster${selected ? " is-selected" : ""}" style="--cluster-fill:${clusterFill(node.members)}" aria-label="맛집 ${node.members.length}곳 모아보기"><span class="pin-head"><span class="pin-count" aria-hidden="true">${node.members.length}</span></span></button>`;
 }
 
 function createPinElement(restaurant, selectedId, onSelect, userLocation) {
