@@ -26,6 +26,7 @@ async function setup(
     invite = false,
     withPhoto = false,
     branched = false,
+    manyRestaurants = false,
   } = {},
 ) {
   const user = {
@@ -137,6 +138,15 @@ async function setup(
     writes: [],
     signed: 0,
   };
+  if (manyRestaurants) {
+    for (let index = 0; index < 6; index++)
+      state.restaurants.push({
+        ...state.restaurants[1],
+        id: `extra-${index}`,
+        name: `추가 식당 ${index + 1}`,
+        lat: 37.7 + index * 0.01,
+      });
+  }
   await page.route("https://cdn.jsdelivr.net/**", (route) =>
     route.fulfill({ contentType: "text/css", body: "" }),
   );
@@ -346,13 +356,50 @@ async function setup(
   page.on("pageerror", (error) => errors.push(error.message));
   await page.goto(invite ? `/?invite=${invitation}` : "/");
   await expect(page.locator("#resultCount")).toHaveText(
-    guest || noGroups ? "0곳" : "2곳",
+    guest || noGroups ? "0곳" : manyRestaurants ? "8곳" : "2곳",
   );
   await expect
     .poll(() => page.evaluate(() => window.__mapStats?.created))
     .toBe(1);
   return { state, errors };
 }
+
+test("list scroll resets only when restaurant order changes", async ({
+  page,
+}) => {
+  await setup(page, { manyRestaurants: true });
+  await expect(page.locator(".user-location-marker")).toBeVisible();
+  const list = page.locator("#restaurantList");
+  await list.evaluate((element) =>
+    element.scrollTo({ left: 400, behavior: "instant" }),
+  );
+  await expect
+    .poll(() => list.evaluate((element) => element.scrollLeft))
+    .toBeGreaterThan(0);
+  const scrolled = await list.evaluate((element) => element.scrollLeft);
+  await page.evaluate(() => {
+    const center = window.__testMap.getCenter();
+    window.__testMap.panTo(
+      new window.naver.maps.LatLng(center.lat() + 0.00000001, center.lng()),
+    );
+  });
+  await expect(page.locator(".restaurant-item h3").first()).toHaveText(
+    "테스트면옥",
+  );
+  await expect
+    .poll(() => list.evaluate((element) => element.scrollLeft))
+    .toBe(scrolled);
+  await page.evaluate(() =>
+    window.__testMap.panTo(new window.naver.maps.LatLng(37.572, 126.985)),
+  );
+  await expect(page.locator(".restaurant-item h3").first()).toHaveText(
+    "테스트카페",
+  );
+  await expect
+    .poll(() => list.evaluate((element) => element.scrollLeft))
+    .toBeLessThanOrEqual(2); // Snap alignment includes the list's 2px padding.
+  await expect(page.locator("#resultCount")).toHaveText("8곳");
+});
 
 test("restaurant list follows the map center without removing offscreen records", async ({
   page,

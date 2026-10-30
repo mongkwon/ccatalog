@@ -1,3 +1,4 @@
+import { useLayoutEffect, useRef } from "react";
 import { RatingBadge } from "./common.jsx";
 import PhotoImage from "./PhotoImage.jsx";
 import { ExternalLink, Plus } from "lucide-react";
@@ -28,6 +29,11 @@ export function RestaurantList({
   canAdd,
   onAdd,
 }) {
+  const listRef = useRef(null);
+  const order = JSON.stringify(restaurants.map((restaurant) => restaurant.id));
+  useLayoutEffect(() => {
+    listRef.current?.scrollTo({ left: 0, top: 0, behavior: "instant" });
+  }, [order]);
   return (
     <aside
       id="restaurantPanel"
@@ -53,7 +59,7 @@ export function RestaurantList({
           </button>
         )}
       </div>
-      <div id="restaurantList" className="restaurant-list">
+      <div id="restaurantList" className="restaurant-list" ref={listRef}>
         {!restaurants.length && (
           <div className="empty-state">
             {emptyMessage || "조건에 맞는 맛집이 없습니다"}
