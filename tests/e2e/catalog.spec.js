@@ -27,6 +27,7 @@ async function setup(
     withPhoto = false,
     branched = false,
     manyRestaurants = false,
+    path = null,
   } = {},
 ) {
   const user = {
@@ -137,6 +138,7 @@ async function setup(
     searches: [],
     writes: [],
     signed: 0,
+    token,
   };
   if (manyRestaurants) {
     for (let index = 0; index < 6; index++)
@@ -354,7 +356,7 @@ async function setup(
   });
   const errors = [];
   page.on("pageerror", (error) => errors.push(error.message));
-  await page.goto(invite ? `/?invite=${invitation}` : "/");
+  await page.goto(path || (invite ? `/?invite=${invitation}` : "/"));
   await expect(page.locator("#resultCount")).toHaveText(
     guest || noGroups ? "0곳" : manyRestaurants ? "8곳" : "2곳",
   );
@@ -363,6 +365,70 @@ async function setup(
     .toBe(1);
   return { state, errors };
 }
+
+test("restaurant routes support selection, back, forward and refresh without remounting the map", async ({
+  page,
+}) => {
+  await setup(page);
+  await page
+    .locator(".restaurant-item")
+    .filter({ hasText: "테스트면옥" })
+    .click();
+  await expect(page).toHaveURL(new RegExp(`#/restaurants/${restaurantId}$`));
+  await expect(page.locator("#selectedCard h2")).toHaveText("테스트면옥");
+  await page.goBack();
+  await expect(page.locator("#selectedCard")).toHaveClass(/hidden/);
+  await page.goForward();
+  await expect(page.locator("#selectedCard h2")).toHaveText("테스트면옥");
+  expect(await page.evaluate(() => window.__mapStats.created)).toBe(1);
+  await page.reload();
+  await expect(page.locator("#selectedCard h2")).toHaveText("테스트면옥");
+  await expect
+    .poll(() => page.evaluate(() => window.__mapStats?.pans.length))
+    .toBeGreaterThan(0);
+  await expect(page.locator(".user-location-marker")).toBeVisible();
+});
+
+test("direct routes wait for records and unavailable links return to the list", async ({
+  page,
+}) => {
+  await setup(page, { path: `/#/restaurants/${restaurantId}` });
+  await expect(page.locator("#selectedCard h2")).toHaveText("테스트면옥");
+  await page.goto("/#/restaurants/88888888-8888-4888-8888-888888888888");
+  await expect(page).toHaveURL(/#\/$/);
+  await expect(page.locator("#selectedCard")).toHaveClass(/hidden/);
+  await expect(page.locator(".catalog-notice")).toContainText(
+    "볼 수 없는 맛집",
+  );
+  await expect(page.locator("#resultCount")).toHaveText("2곳");
+});
+
+test("shared restaurant link survives Kakao login and the OAuth callback", async ({
+  page,
+}) => {
+  const { state, errors } = await setup(page, {
+    guest: true,
+    path: `/#/restaurants/${restaurantId}`,
+  });
+  await expect(page.locator("#authPanel")).toHaveClass(/is-open/);
+  await expect(page.locator("#selectedCard")).toHaveClass(/hidden/);
+  await page.getByRole("button", { name: "카카오로 시작하기" }).click();
+  await expect(page).toHaveURL(/fixture\.supabase\.co\/auth\/v1\/authorize/);
+  expect(new URL(page.url()).searchParams.get("redirect_to")).toBe(
+    "http://127.0.0.1:4174/",
+  );
+  await page.goto(
+    `/#access_token=${encodeURIComponent(state.token)}&refresh_token=fixture-refresh&expires_in=3600&token_type=bearer`,
+  );
+  await expect(page).toHaveURL(new RegExp(`#/restaurants/${restaurantId}$`));
+  await expect(page.locator("#selectedCard h2")).toHaveText("테스트면옥");
+  expect(
+    await page.evaluate(() =>
+      sessionStorage.getItem("ccatalog.auth.returnRestaurant"),
+    ),
+  ).toBe(null);
+  expect(errors).toEqual([]);
+});
 
 test("list scroll resets only when restaurant order changes", async ({
   page,
@@ -554,6 +620,7 @@ test("filter, search, map and smooth centering retain shared state", async ({
   await expect(page.locator("#resultCount")).toHaveText("1곳");
   await page.locator(".restaurant-item").click();
   await expect(page.locator("#selectedCard h2")).toHaveText("테스트면옥");
+  await expect(page.locator("#resultCount")).toHaveText("1곳");
   const layout = await page.evaluate(() => {
     const pin = document
       .querySelector("#map .pin-marker.is-selected")

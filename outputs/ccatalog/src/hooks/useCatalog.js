@@ -15,6 +15,7 @@ export function useCatalog() {
   const [restaurants, setRestaurants] = useState([]);
   const [auth, setAuth] = useState(emptyAuth);
   const [ready, setReady] = useState(false);
+  const [recordsReady, setRecordsReady] = useState(false);
   const [hiddenGroups, setHiddenGroups] = useState([]);
   const [inviteMessage, setInviteMessage] = useState("");
   const storeRef = useRef(null);
@@ -28,8 +29,10 @@ export function useCatalog() {
     try {
       const context = await store.getMemberContext();
       if (request !== revision.current) return;
-      if (loadedUserId.current !== (context.user?.id ?? null))
+      if (loadedUserId.current !== (context.user?.id ?? null)) {
         setRestaurants([]);
+        setRecordsReady(false);
+      }
       loadedUserId.current = context.user?.id ?? null;
       const publishAuth = () =>
         setAuth((current) =>
@@ -42,7 +45,10 @@ export function useCatalog() {
           }),
         );
       publishAuth();
-      if (!context.user) return;
+      if (!context.user) {
+        setRecordsReady(true);
+        return;
+      }
       const groupIds = new Set(context.groups.map((group) => group.id));
       setRestaurants((current) => {
         const next = current.filter((item) => groupIds.has(item.groupId));
@@ -68,8 +74,13 @@ export function useCatalog() {
       }
       const dataRequest = dataRevision.current;
       const records = await store.list();
-      if (request === revision.current && dataRequest === dataRevision.current)
+      if (
+        request === revision.current &&
+        dataRequest === dataRevision.current
+      ) {
         setRestaurants((current) => reconcileById(current, records));
+        setRecordsReady(true);
+      }
     } catch (error) {
       if (request !== revision.current) return;
       console.warn("catalog connection failed", error);
@@ -112,6 +123,7 @@ export function useCatalog() {
           ++revision.current;
           if (userChanged || !store.userId) {
             loadedUserId.current = null;
+            setRecordsReady(false);
             setRestaurants([]);
             setAuth(emptyAuth);
           }
@@ -245,6 +257,7 @@ export function useCatalog() {
     auth,
     setAuth,
     ready,
+    recordsReady,
     storeRef,
     syncAuth,
     refreshRestaurants,

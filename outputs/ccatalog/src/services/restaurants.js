@@ -6,6 +6,7 @@ import {
   normalizeDeliveryApps,
   createId,
 } from "../lib/domain.js";
+import { rememberReturnRestaurant } from "../lib/routes.js";
 
 const columns =
   "id,group_id,created_by,name,category,rating,vote_round,area,lat,lng,menus,menu_items,delivery_apps,memo,created_at,updated_at";
@@ -99,6 +100,7 @@ export class SupabaseRestaurantStore {
     return data;
   }
   async signInWithKakao() {
+    rememberReturnRestaurant(location.hash);
     const { error } = await this.client.auth.signInWithOAuth({
       provider: "custom:kakao-test",
       options: { redirectTo: location.href.split(/[?#]/)[0] },

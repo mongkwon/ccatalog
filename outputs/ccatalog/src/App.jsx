@@ -27,6 +27,8 @@ import {
 } from "./lib/domain.js";
 import { prepareRestaurantPhoto } from "./lib/photos.js";
 import { restaurantsByDistance } from "./lib/restaurant-order.js";
+import { useRestaurantRoute } from "./hooks/useRestaurantRoute.js";
+import { takeReturnRestaurant } from "./lib/routes.js";
 
 export default function App() {
   const catalog = useCatalog();
@@ -37,6 +39,7 @@ export default function App() {
     ownsRestaurant,
     hiddenGroups,
     ready,
+    recordsReady,
     config,
     storeRef,
     updateRestaurant,
@@ -54,7 +57,11 @@ export default function App() {
       })),
     [restaurants, groupMap],
   );
-  const [selectedId, setSelectedId] = useState(null);
+  const {
+    restaurantId: selectedId,
+    navigate: setSelectedId,
+    historyVersion,
+  } = useRestaurantRoute();
   const [selectionMotion, setSelectionMotion] = useState(0);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("all");
@@ -123,6 +130,9 @@ export default function App() {
   const selected =
     visibleRestaurants.find((restaurant) => restaurant.id === selectedId) ||
     null;
+  const routeRestaurant = groupedRestaurants.find(
+    (restaurant) => restaurant.id === selectedId,
+  );
   const onSelect = useCallback((id, { closePanel = false } = {}) => {
     setDialog((dialog) => ({ ...dialog, open: false }));
     if (closePanel) {
@@ -144,6 +154,53 @@ export default function App() {
     () => restaurantsByDistance(visibleRestaurants, map.center),
     [visibleRestaurants, map.center],
   );
+  useEffect(() => {
+    setDialog({ type: null, open: false, restaurant: null });
+    setViewer({ restaurantId: null, index: 0 });
+    setSearchOpen(false);
+    setAuthOpen(false);
+    if (!selectedId) setListOpen(true);
+  }, [historyVersion]);
+  useEffect(() => {
+    if (!ready || !isMember) return;
+    const pending = takeReturnRestaurant();
+    if (pending && !selectedId) setSelectedId(pending, { replace: true });
+  }, [ready, isMember, setSelectedId]);
+  useEffect(() => {
+    if (!selectedId || !ready || auth.status !== "ready") return;
+    if (!isMember) {
+      setAuthOpen(true);
+      return;
+    }
+    if (recordsReady && !routeRestaurant) {
+      if (!authOpen)
+        setNotice("삭제되었거나 참여한 그룹에서 볼 수 없는 맛집입니다");
+      setSelectedId(null, { replace: true });
+      setListOpen(true);
+    }
+  }, [
+    selectedId,
+    ready,
+    auth.status,
+    isMember,
+    recordsReady,
+    routeRestaurant?.id,
+    setSelectedId,
+  ]);
+  useEffect(() => {
+    if (
+      !routeRestaurant ||
+      visibleRestaurants.some((restaurant) => restaurant.id === selectedId)
+    )
+      return;
+    setQuery("");
+    setFilter("all");
+    catalog.setHiddenGroups((ids) =>
+      ids.includes(routeRestaurant.groupId)
+        ? ids.filter((id) => id !== routeRestaurant.groupId)
+        : ids,
+    );
+  }, [selectedId, routeRestaurant?.groupId]);
   useLayoutEffect(() => {
     const classes = {
       "has-add-access": canAdd,
@@ -161,11 +218,9 @@ export default function App() {
   }, [canAdd, listOpen, searchOpen, tutorialOpen]);
 
   useLayoutEffect(() => {
-    if (!selectedId) return;
-    const restaurant = restaurants.find((item) => item.id === selectedId);
-    if (restaurant)
-      map.adapterRef.current?.panTo(restaurant, { accountForCards: true });
-  }, [selectedId, selectionMotion]);
+    if (selected)
+      map.adapterRef.current?.panTo(selected, { accountForCards: true });
+  }, [selected?.id, selectionMotion, map.adapter]);
 
   useEffect(() => {
     if (!ready) return;
@@ -181,7 +236,6 @@ export default function App() {
     )
       return;
     const timer = setTimeout(() => {
-      setSelectedId(null);
       setSearchOpen(false);
       setListOpen(true);
       setTutorialOpen(true);
@@ -251,7 +305,6 @@ export default function App() {
   useEffect(() => {
     if (!canAdd) {
       setDialog({ type: null, open: false, restaurant: null });
-      setSelectedId(null);
       setViewer({ restaurantId: null, index: 0 });
     }
   }, [canAdd, auth.user?.id]);
@@ -263,10 +316,6 @@ export default function App() {
       !groups.has(dialog.restaurant.groupId)
     ) {
       setDialog({ type: null, open: false, restaurant: null });
-      setListOpen(true);
-    }
-    if (selectedId && !restaurants.some((item) => item.id === selectedId)) {
-      setSelectedId(null);
       setListOpen(true);
     }
     if (

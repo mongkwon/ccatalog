@@ -181,6 +181,7 @@ export function useMap({
     mockHost,
     mockPins,
     adapterRef,
+    adapter,
     center,
     userLocation,
     setUserLocation,
