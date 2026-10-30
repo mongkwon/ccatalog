@@ -6,6 +6,20 @@ import {
 import { normaliseNaverCoord } from "./maps.js";
 
 async function fetchPlaceCandidates(query, runtimeConfig, signal) {
+  return (await requestPlaces({ query }, runtimeConfig, signal)).items;
+}
+
+async function importSharedPlace(sharedText, runtimeConfig, signal) {
+  return requestPlaces({ sharedText }, runtimeConfig, signal);
+}
+
+function isNaverSharedText(value) {
+  return /https?:\/\/(?:naver\.me|(?:m\.)?map\.naver\.com|(?:m\.|pcmap\.)?place\.naver\.com)(?=[/?#\s]|$)/i.test(
+    value,
+  );
+}
+
+async function requestPlaces(body, runtimeConfig, signal) {
   if (!runtimeConfig.supabaseUrl || !runtimeConfig.supabaseAnonKey) {
     throw new Error("Supabase config is missing");
   }
@@ -19,7 +33,7 @@ async function fetchPlaceCandidates(query, runtimeConfig, signal) {
       apikey: runtimeConfig.supabaseAnonKey,
       Authorization: `Bearer ${runtimeConfig.supabaseAnonKey}`,
     },
-    body: JSON.stringify({ query }),
+    body: JSON.stringify(body),
   });
 
   const payload = await response.json().catch(() => ({}));
@@ -27,9 +41,12 @@ async function fetchPlaceCandidates(query, runtimeConfig, signal) {
     throw new Error(payload.error || "Place search request failed");
   }
 
-  return Array.isArray(payload.items)
-    ? payload.items.map(normalizePlaceCandidate).filter((place) => place.name)
-    : [];
+  return {
+    ...payload,
+    items: Array.isArray(payload.items)
+      ? payload.items.map(normalizePlaceCandidate).filter((place) => place.name)
+      : [],
+  };
 }
 
 function normalizePlaceCandidate(item) {
@@ -73,4 +90,9 @@ function resolvePlaceCoordinate(place) {
   return null;
 }
 
-export { fetchPlaceCandidates, resolvePlaceCoordinate };
+export {
+  fetchPlaceCandidates,
+  importSharedPlace,
+  isNaverSharedText,
+  resolvePlaceCoordinate,
+};

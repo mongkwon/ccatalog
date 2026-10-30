@@ -13,6 +13,8 @@ import {
 } from "../lib/domain.js";
 import {
   fetchPlaceCandidates,
+  importSharedPlace,
+  isNaverSharedText,
   resolvePlaceCoordinate,
 } from "../services/places.js";
 
@@ -88,8 +90,9 @@ export default function RestaurantForm({
     };
   }, [open, restaurant]);
 
-  async function searchPlaces() {
-    if (name.trim().length < 2) {
+  async function searchPlaces(value = name) {
+    const importing = isNaverSharedText(value);
+    if (value.trim().length < 2) {
       setMessage("두 글자 이상 입력해주세요");
       return;
     }
@@ -98,20 +101,43 @@ export default function RestaurantForm({
     search.current = controller;
     const revision = ++generation.current;
     setSearchBusy(true);
-    setMessage("검색 중");
+    setMessage(importing ? "링크의 장소를 확인하고 있습니다" : "검색 중");
     setResults([]);
+    if (importing) setPlace(null);
     try {
-      const candidates = await fetchPlaceCandidates(
-        name.trim(),
-        config,
-        controller.signal,
-      );
+      const result = importing
+        ? await importSharedPlace(value, config, controller.signal)
+        : {
+            items: await fetchPlaceCandidates(
+              value.trim(),
+              config,
+              controller.signal,
+            ),
+          };
+      const candidates = result.items;
       if (revision !== generation.current) return;
+      if (importing && result.verified && candidates.length === 1) {
+        selectPlace(candidates[0]);
+        return;
+      }
+      if (importing) setName(result.query || "");
       setResults(candidates);
-      setMessage(candidates.length ? "" : "검색 결과가 없습니다");
+      setMessage(
+        importing
+          ? candidates.length
+            ? "가져올 식당을 선택해주세요"
+            : "링크에서 장소를 확인하지 못했습니다. 식당명으로 검색해주세요."
+          : candidates.length
+            ? ""
+            : "검색 결과가 없습니다",
+      );
     } catch (error) {
       if (error.name !== "AbortError" && revision === generation.current)
-        setMessage("장소 검색 설정이 필요합니다");
+        setMessage(
+          importing
+            ? "링크를 확인하지 못했습니다. 식당명으로 검색해주세요."
+            : "장소 검색 설정이 필요합니다",
+        );
     } finally {
       if (revision === generation.current) setSearchBusy(false);
     }
@@ -223,10 +249,18 @@ export default function RestaurantForm({
                   name="name"
                   type="text"
                   required
-                  maxLength={40}
+                  maxLength={2048}
+                  placeholder="식당명 또는 네이버지도 공유 링크"
                   autoComplete="off"
                   enterKeyHint="search"
                   value={name}
+                  onPaste={(event) => {
+                    const text = event.clipboardData.getData("text/plain");
+                    if (!isNaverSharedText(text)) return;
+                    event.preventDefault();
+                    setName(text.slice(0, 2048));
+                    searchPlaces(text);
+                  }}
                   onChange={(event) => {
                     search.current?.abort();
                     ++generation.current;
@@ -252,7 +286,7 @@ export default function RestaurantForm({
                   type="button"
                   aria-label="장소 검색"
                   disabled={searchBusy || busy}
-                  onClick={searchPlaces}
+                  onClick={() => searchPlaces()}
                 >
                   <SearchIcon />
                 </button>
@@ -530,7 +564,7 @@ export default function RestaurantForm({
             id="spotSubmitButton"
             className="primary-button"
             type="submit"
-            disabled={busy}
+            disabled={busy || searchBusy}
           >
             {busy ? "저장 중" : "저장"}
           </button>

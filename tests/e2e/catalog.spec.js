@@ -362,8 +362,12 @@ async function setup(
         body = { id };
       }
     } else if (path.includes("/functions/v1/naver-place-search")) {
+      if (state.importDelay) await state.importDelay;
       state.searches.push(payload.query);
       body = {
+        ...(payload.sharedText
+          ? { verified: state.importVerified !== false, query: "검색된식당" }
+          : {}),
         items: [
           {
             name: "검색된식당",
@@ -518,6 +522,60 @@ test("nickname and group renames reach another member without refreshing or clea
   ).toBeVisible();
   expect(await other.evaluate(() => window.__mapStats.created)).toBe(1);
   await secondContext.close();
+});
+
+test("pasted Naver share text fills a verified place without saving or clearing the draft", async ({
+  page,
+}) => {
+  const { state } = await setup(page);
+  await page.locator("#addButton").click();
+  await page.locator("#memoInput").fill("가져오기 전 메모");
+  await page.locator("#nameInput").evaluate((input) => {
+    const data = new DataTransfer();
+    data.setData(
+      "text/plain",
+      "[네이버지도]\n공유 식당\n서울 중구 세종대로 1\nhttps://naver.me/example",
+    );
+    input.dispatchEvent(
+      new ClipboardEvent("paste", {
+        clipboardData: data,
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+  });
+  await expect(page.locator("#nameInput")).toHaveValue("검색된식당");
+  await expect(page.locator("#memoInput")).toHaveValue("가져오기 전 메모");
+  expect(
+    state.writes.filter((item) => item.path.endsWith("/restaurants")),
+  ).toHaveLength(0);
+  await page.locator("#spotSubmitButton").click();
+  await expect(page.locator("#selectedCard .restaurant-title-name")).toHaveText(
+    "검색된식당",
+  );
+  expect(state.restaurants.at(-1).lat).toBe(37.5667);
+});
+
+test("unverified imported candidates still require explicit place selection", async ({
+  page,
+}) => {
+  const { state } = await setup(page);
+  state.importVerified = false;
+  await page.locator("#addButton").click();
+  await page.locator("#nameInput").fill("https://naver.me/example");
+  await page.locator("#nameInput").press("Enter");
+  await expect(page.locator(".place-result-message")).toContainText(
+    "가져올 식당을 선택",
+  );
+  await page.locator("#spotSubmitButton").click();
+  expect(
+    state.writes.filter((item) => item.path.endsWith("/restaurants")),
+  ).toHaveLength(0);
+  await page.locator(".place-result").click();
+  await page.locator("#spotSubmitButton").click();
+  await expect(page.locator("#selectedCard .restaurant-title-name")).toHaveText(
+    "검색된식당",
+  );
 });
 
 test("name editing supports cancellation and rejects blank input", async ({
