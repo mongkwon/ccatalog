@@ -30,6 +30,7 @@ async function setup(
     path = null,
     viewerId = userId,
     sharedState = null,
+    restaurantName = null,
   } = {},
 ) {
   const user = {
@@ -97,7 +98,7 @@ async function setup(
         id: restaurantId,
         group_id: groupId,
         created_by: userId,
-        name: branched ? "정돈 논현점" : "테스트면옥",
+        name: restaurantName || (branched ? "정돈 논현점" : "테스트면옥"),
         category: "한식",
         rating: 3,
         area: "서울 중구",
@@ -679,6 +680,39 @@ test("shared restaurant link survives Kakao login and the OAuth callback", async
     ),
   ).toBe(null);
   expect(errors).toEqual([]);
+});
+
+test("long detail names wrap in full while list names remain single-line", async ({
+  page,
+}, testInfo) => {
+  const name =
+    "정돈 갤러리아백화점 타임월드점 아주 긴 이름의 특별한 음식점 서울특별시강남구아주아주아주긴지점이름";
+  await setup(page, { restaurantName: name });
+  await page.locator(".restaurant-item").first().click();
+  await expect(page.locator("#selectedCard .restaurant-title-name")).toHaveText(
+    name,
+  );
+  await page.screenshot({ path: testInfo.outputPath("long-name.png") });
+  const layout = await page.evaluate(() => {
+    const name = document.querySelector("#selectedCard .restaurant-title-name");
+    const heading = name.closest("h2");
+    const card = heading.closest("#selectedCard");
+    return {
+      wrapped:
+        name.getBoundingClientRect().height >
+        parseFloat(getComputedStyle(name).lineHeight) * 1.5,
+      fits:
+        name.scrollWidth <= name.clientWidth + 1 &&
+        card.scrollWidth <= card.clientWidth + 1,
+      listSingleLine:
+        getComputedStyle(document.querySelector(".restaurant-item h3"))
+          .whiteSpace === "nowrap",
+    };
+  });
+  expect(layout).toEqual({ wrapped: true, fits: true, listSingleLine: true });
+  await expect(
+    page.locator("#selectedCard .restaurant-title-medal"),
+  ).toBeVisible();
 });
 
 test("list medals appear as name-sized emoji before restaurant names without badges", async ({

@@ -1334,7 +1334,10 @@ button {
 .selected-card h2 {
   max-width: none;
   font-size: 22px;
-  line-height: 1.15;
+  line-height: 1.3;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
 }
 
 .selected-card .restaurant-title {
@@ -1350,8 +1353,8 @@ button {
 
 .restaurant-title-name {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
+  word-break: keep-all;
 }
 
 .card-layout {
