@@ -2101,15 +2101,11 @@ button {
 }
 
 .pin-cluster .pin-head {
-  grid-template-rows: 20px 11px;
-  align-content: center;
-  padding-bottom: 2px;
-}
-.pin-cluster .pin-level {
-  font-size: 20px;
+  --medal-color: #7b8490;
+  border-color: var(--edge-soft);
 }
 .pin-count {
-  font-size: 10px;
+  font-size: 17px;
   font-weight: 900;
   line-height: 1;
 }

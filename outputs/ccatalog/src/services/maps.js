@@ -329,7 +329,7 @@ class NaverMapAdapter {
         position: new window.naver.maps.LatLng(node.lat, node.lng),
         map: this.map,
         zIndex: node.cluster ? 150 : 100,
-        title: restaurant.name,
+        title: node.cluster ? `맛집 ${node.members.length}곳` : restaurant.name,
         icon: {
           content,
           anchor: new window.naver.maps.Point(22, 22),
@@ -630,11 +630,10 @@ function pinHtml(restaurant, selectedId) {
 }
 
 function clusterHtml(node, selectedId) {
-  const meta = RATING_META[node.restaurant.rating];
   const selected = node.members.some(
     (restaurant) => restaurant.id === selectedId,
   );
-  return `<button type="button" class="pin-marker pin-cluster${selected ? " is-selected" : ""}" data-rating="${node.restaurant.rating}" aria-label="맛집 ${node.members.length}곳 모아보기"><span class="pin-head"><span class="pin-level" aria-hidden="true">${meta.icon}</span><span class="pin-count" aria-hidden="true">+${node.members.length - 1}</span></span></button>`;
+  return `<button type="button" class="pin-marker pin-cluster${selected ? " is-selected" : ""}" aria-label="맛집 ${node.members.length}곳 모아보기"><span class="pin-head"><span class="pin-count" aria-hidden="true">${node.members.length}</span></span></button>`;
 }
 
 function createPinElement(restaurant, selectedId, onSelect, userLocation) {

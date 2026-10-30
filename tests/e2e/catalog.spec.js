@@ -853,12 +853,14 @@ test("only the original Naver Maps link remains in restaurant details", async ({
   await expect(link).toHaveCount(0);
 });
 
-test("nearby pins show plus counts and separate on cluster click or filtering", async ({
+test("nearby pins show total counts without medals and separate on click or filtering", async ({
   page,
 }, testInfo) => {
   await setup(page, { closePins: true });
   await expect(page.locator("#map .pin-cluster")).toHaveCount(1);
-  await expect(page.locator("#map .pin-count")).toHaveText("+1");
+  await expect(page.locator("#map .pin-count")).toHaveText("2");
+  await expect(page.locator("#map .pin-cluster .pin-level")).toHaveCount(0);
+  await expect(page.locator("#map .pin-cluster")).not.toHaveAttribute("data-rating");
   await expect(page.locator("#resultCount")).toHaveText("2곳");
   await page.screenshot({ path: testInfo.outputPath("cluster.png") });
   await page.locator("#map .pin-cluster").click();
@@ -870,7 +872,7 @@ test("nearby pins show plus counts and separate on cluster click or filtering", 
   expect(await page.evaluate(() => window.__mapStats.created)).toBe(1);
   await expect(page.locator("#resultCount")).toHaveText("2곳");
   await page.evaluate(() => window.__testMap.setZoom(13));
-  await expect(page.locator("#map .pin-count")).toHaveText("+1");
+  await expect(page.locator("#map .pin-count")).toHaveText("2");
   await page.locator('.dock-filter-button[data-filter="1"]').click();
   await expect(page.locator("#map .pin-cluster")).toHaveCount(0);
   await expect(page.locator("#map .pin-marker")).toHaveCount(1);
